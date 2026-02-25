@@ -241,7 +241,7 @@ while IFS= read -r d; do
 
     echo "  <div class=\"archive-year\">"
     echo "    <button class=\"archive-year-toggle\" aria-expanded=\"$YEAR_EXPANDED\" onclick=\"this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')==='true'?'false':'true')\">"
-    echo "      $YEAR <span class=\"toggle-icon\">\u25BC</span>"
+    echo "      $YEAR <span class=\"toggle-icon\">&#9660;</span>"
     echo "    </button>"
     echo "    <div class=\"archive-year-body\" style=\"max-height:9999px\">"
     PREV_MONTH=""
