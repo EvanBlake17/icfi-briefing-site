@@ -419,7 +419,6 @@ body {
   color: var(--text);
   padding: 1px 0;
   border-radius: 2px;
-  cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 

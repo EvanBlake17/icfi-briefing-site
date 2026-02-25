@@ -207,42 +207,7 @@
     updateActive();
   }
 
-  // ── 5. Quick-Share Section Links ─────────────────────────────
-
-  function initShareLinks() {
-    var content = document.querySelector('.content');
-    if (!content) return;
-
-    var headings = content.querySelectorAll('h2[id], h3[id]');
-    headings.forEach(function (h) {
-      // Skip if already wrapped
-      if (h.parentNode.classList && h.parentNode.classList.contains('heading-wrapper')) return;
-
-      var wrapper = document.createElement('div');
-      wrapper.className = 'heading-wrapper';
-      h.parentNode.insertBefore(wrapper, h);
-      wrapper.appendChild(h);
-
-      var link = document.createElement('a');
-      link.className = 'share-link';
-      link.textContent = '#';
-      link.href = '#' + h.id;
-      link.addEventListener('click', function (e) {
-        e.preventDefault();
-        var url = window.location.origin + window.location.pathname + '#' + h.id;
-        navigator.clipboard.writeText(url).then(function () {
-          var tip = document.createElement('span');
-          tip.className = 'share-copied';
-          tip.textContent = 'Copied!';
-          wrapper.appendChild(tip);
-          setTimeout(function () { tip.remove(); }, 1300);
-        });
-      });
-      wrapper.insertBefore(link, h);
-    });
-  }
-
-  // ── 6. Section Bookmarking ───────────────────────────────────
+  // ── 5. Section Bookmarking ───────────────────────────────────
 
   var bookmarks = {};
   var bookmarkDate = '';
@@ -257,7 +222,6 @@
 
     var headings = content.querySelectorAll('h2[id], h3[id]');
     headings.forEach(function (h) {
-      var wrapper = h.closest('.heading-wrapper') || h.parentNode;
 
       var star = document.createElement('span');
       star.className = 'bookmark-star';
@@ -317,13 +281,16 @@
 
     function updateFocusedSection() {
       if (!focusActive) return;
+      // Use a threshold line near the top of the viewport (100px down).
+      // The focused section is the last section whose top is above this line.
+      // This matches how the TOC "active heading" tracking works.
+      var threshold = 150;
       var best = briefingSections[0];
-      var bestDist = Infinity;
-      briefingSections.forEach(function (sec) {
-        var rect = sec.getBoundingClientRect();
-        var dist = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2);
-        if (dist < bestDist) { bestDist = dist; best = sec; }
-      });
+      for (var i = 0; i < briefingSections.length; i++) {
+        if (briefingSections[i].getBoundingClientRect().top <= threshold) {
+          best = briefingSections[i];
+        }
+      }
       briefingSections.forEach(function (sec) {
         sec.classList.toggle('section-focused', sec === best);
       });
@@ -593,14 +560,7 @@
       });
     });
 
-    // Click existing highlight → remove
-    content.addEventListener('click', function (e) {
-      var mark = e.target.closest('.user-highlight');
-      if (!mark || !mark.dataset.hlId) return;
-      var hlId = mark.dataset.hlId;
-      unwrapHighlight(hlId);
-      deleteHL(hlId).then(function () { updateBadge(); });
-    });
+    // Clicking a highlight no longer removes it — use the Notes panel instead.
 
     // --- Apply / remove highlight marks ---
 
@@ -653,11 +613,6 @@
         while (prev) {
           if (/^H[23]$/.test(prev.tagName) && prev.id) {
             return { id: prev.id, title: prev.textContent.replace(/[\u2606\u2605]/g, '').trim() };
-          }
-          // Check inside heading-wrapper
-          if (prev.classList && prev.classList.contains('heading-wrapper')) {
-            var h = prev.querySelector('h2[id], h3[id]');
-            if (h) return { id: h.id, title: h.textContent.replace(/[\u2606\u2605]/g, '').trim() };
           }
           prev = prev.previousElementSibling;
         }
@@ -1098,7 +1053,6 @@
     initProgress();
     initReadingTime();
     initTOC();
-    initShareLinks();
     initBookmarks();
     initFocusMode();
 
