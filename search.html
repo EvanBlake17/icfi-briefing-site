@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Archive — Daily Briefing</title>
+<title>Search — Daily Briefing</title>
 <script>(function(){
   var t=localStorage.getItem('theme');
   if(t){document.documentElement.setAttribute('data-theme',t);}
@@ -19,7 +19,7 @@
   <nav class="top-nav">
     <div class="nav-links">
       <a href="index.html">Latest</a>
-      <a href="search.html">Search</a>
+      <a href="archive.html">Archive</a>
     </div>
     <button id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
       <span class="show-light">◐ Dark</span>
@@ -30,15 +30,17 @@
   <header class="masthead">
     <div class="masthead-rules-top"></div>
     <h1 class="masthead-title">Daily Briefing</h1>
-    <p class="masthead-date">Archive</p>
+    <p class="masthead-date">Search</p>
     <div class="masthead-rule-bottom"></div>
   </header>
 
   <main class="content">
-    <ul class="archive-list">
-      <li><a href="briefings/2026-02-25.html"><span class="entry-title">February 25, 2026</span></a></li>
-      <li><a href="briefings/2026-02-24.html"><span class="entry-title">February 24, 2026</span></a></li>
-    </ul>
+    <div class="search-box">
+      <input type="text" id="search-input" class="search-input"
+             placeholder="Search across all briefings..." autofocus>
+    </div>
+    <p id="search-meta" class="search-meta"></p>
+    <ul id="search-results" class="search-results"></ul>
   </main>
 
   <footer class="site-footer">
@@ -47,5 +49,6 @@
 
 </div>
 <script src="assets/theme.js"></script>
+<script src="assets/search.js"></script>
 </body>
 </html>

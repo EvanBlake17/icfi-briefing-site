@@ -12,6 +12,8 @@
   --link-hover:   #b00000;
   --border:       #1a1a18;
   --border-light: #ccc8be;
+  --hl-bg:        rgba(255, 215, 90, 0.40);
+  --hl-bg-hover:  rgba(255, 215, 90, 0.60);
 }
 
 [data-theme="dark"] {
@@ -23,6 +25,8 @@
   --link-hover:   #e0b880;
   --border:       #e2ddd4;
   --border-light: #3a3630;
+  --hl-bg:        rgba(190, 150, 60, 0.30);
+  --hl-bg-hover:  rgba(190, 150, 60, 0.50);
 }
 
 /* 2. Reset & Base */
@@ -317,9 +321,473 @@ body {
   margin-bottom: 0;
 }
 
-/* 10. Responsive */
+/* =============================================================
+   10. Reading Progress Bar
+   ============================================================= */
+
+.reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  background: var(--link);
+  z-index: 9999;
+  transition: width 80ms linear;
+  pointer-events: none;
+}
+
+/* =============================================================
+   11. Table of Contents
+   ============================================================= */
+
+.toc-toggle {
+  cursor: pointer;
+}
+
+.toc-panel {
+  display: none;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  padding: 14px 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+
+.toc-panel.open {
+  display: block;
+}
+
+.toc-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toc-panel li {
+  margin: 0;
+}
+
+.toc-panel a {
+  display: block;
+  padding: 5px 20px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12.5px;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  transition: color 0.1s, background 0.1s;
+}
+
+.toc-panel a:hover {
+  color: var(--text);
+  background: var(--bg-secondary);
+}
+
+.toc-panel a.active {
+  color: var(--link);
+  font-weight: 600;
+}
+
+.toc-panel .toc-h3 a {
+  padding-left: 36px;
+  font-size: 11.5px;
+}
+
+/* =============================================================
+   12. Highlighting
+   ============================================================= */
+
+.user-highlight {
+  background: var(--hl-bg);
+  padding: 1px 0;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.user-highlight:hover {
+  background: var(--hl-bg-hover);
+}
+
+/* Tooltip that appears on text selection */
+.highlight-tooltip {
+  position: absolute;
+  z-index: 9000;
+  pointer-events: auto;
+}
+
+.highlight-tooltip .hl-btn {
+  display: block;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  padding: 5px 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+
+.highlight-tooltip .hl-btn:hover {
+  opacity: 0.85;
+}
+
+/* =============================================================
+   13. Notes Panel
+   ============================================================= */
+
+.notes-toggle {
+  cursor: pointer;
+}
+
+.notes-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  max-width: 100vw;
+  height: 100vh;
+  background: var(--bg);
+  border-left: 1px solid var(--border-light);
+  box-shadow: -4px 0 20px rgba(0,0,0,0.10);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  animation: slideIn 0.15s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.notes-header h3 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 0;
+}
+
+.notes-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.notes-close:hover {
+  color: var(--text);
+}
+
+.notes-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 20px;
+}
+
+.notes-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  padding: 24px 20px;
+}
+
+.notes-section h4 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 16px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.notes-section:first-child h4 {
+  margin-top: 4px;
+}
+
+.notes-item {
+  position: relative;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.notes-item:last-child {
+  border-bottom: none;
+}
+
+.notes-item p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.notes-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.notes-item:hover .notes-remove {
+  opacity: 1;
+}
+
+.notes-remove:hover {
+  color: var(--link);
+}
+
+.notes-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.notes-actions button {
+  flex: 1;
+  padding: 8px 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  border: 1px solid var(--border-light);
+  transition: background 0.15s, color 0.15s;
+}
+
+.notes-copy {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text) !important;
+}
+
+.notes-copy:hover {
+  opacity: 0.85;
+}
+
+.notes-clear {
+  background: none;
+  color: var(--text-muted);
+}
+
+.notes-clear:hover {
+  color: var(--link);
+  border-color: var(--link);
+}
+
+/* =============================================================
+   14. Search Page
+   ============================================================= */
+
+.search-box {
+  margin-bottom: 28px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.search-input:focus {
+  border-color: var(--border);
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-meta {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  letter-spacing: 0.02em;
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-results li {
+  border-bottom: 1px solid var(--border-light);
+  padding: 16px 0;
+}
+
+.search-results li:first-child {
+  border-top: 1px solid var(--border-light);
+}
+
+.search-result-date {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.search-result-date a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.search-result-date a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.search-result-excerpt {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.search-result-excerpt mark {
+  background: var(--hl-bg);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+/* =============================================================
+   15. Print Stylesheet
+   ============================================================= */
+
+@media print {
+  .reading-progress,
+  .top-nav,
+  .toc-panel,
+  .highlight-tooltip,
+  .notes-panel,
+  .site-footer {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+    line-height: 1.6;
+  }
+
+  .page-wrapper {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  .masthead {
+    padding-top: 0;
+  }
+
+  .masthead-rules-top {
+    border-color: #000;
+  }
+
+  .masthead-rule-bottom {
+    border-color: #000;
+  }
+
+  .content a {
+    color: #000;
+    text-decoration: underline;
+  }
+
+  .content a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #555;
+    word-break: break-all;
+  }
+
+  .content a[href^="#"]::after {
+    content: none;
+  }
+
+  .user-highlight {
+    background: #ffd !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .content hr {
+    border-color: #999;
+  }
+
+  .content h2 {
+    border-color: #999;
+    page-break-after: avoid;
+  }
+
+  .content h3 {
+    page-break-after: avoid;
+  }
+
+  .content p, .content li {
+    orphans: 3;
+    widows: 3;
+  }
+}
+
+/* =============================================================
+   16. Responsive
+   ============================================================= */
+
 @media (max-width: 600px) {
   html { font-size: 16px; }
   .page-wrapper { padding: 0 18px; }
   .masthead-title { font-size: 1.8rem; }
+
+  .notes-panel {
+    width: 100vw;
+  }
+
+  .toc-panel .toc-h3 a {
+    padding-left: 28px;
+  }
 }

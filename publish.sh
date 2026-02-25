@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 # publish.sh — Convert a markdown briefing to HTML and publish to GitHub Pages
 #
-# Usage: ./publish.sh <path/to/YYYY-MM-DD.md> ["optional commit message"]
-#
-# The markdown file must be named YYYY-MM-DD.md (e.g. 2026-02-25.md).
-# The file is copied into md/ in this repo, converted to HTML via pandoc,
-# then index.html and archive.html are regenerated and everything is committed.
+# Usage:
+#   ./publish.sh 2026-02-26                    ← looks for ~/icfi-work/briefing/daily/2026-02-26_full.md
+#   ./publish.sh path/to/any-file.md           ← explicit path (filename must start with YYYY-MM-DD)
+#   ./publish.sh 2026-02-26 "commit message"   ← optional custom commit message
 #
 # Requirements: pandoc (brew install pandoc)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BRIEFING_DIR="$HOME/icfi-work/briefing/daily"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 usage() {
-  echo "Usage: $0 <path/to/YYYY-MM-DD.md> [\"commit message\"]"
-  echo ""
-  echo "  The markdown filename must be in YYYY-MM-DD format."
-  echo "  Example: $0 ~/Desktop/2026-02-25.md"
+  echo "Usage:"
+  echo "  $0 YYYY-MM-DD                  # uses ~/icfi-work/briefing/daily/YYYY-MM-DD_full.md"
+  echo "  $0 path/to/YYYY-MM-DD*.md      # explicit file path"
+  echo "  $0 YYYY-MM-DD \"commit message\" # optional commit message"
   exit 1
 }
 
@@ -36,42 +36,69 @@ format_date() {
   if date -d "$d" "+%B %-d, %Y" 2>/dev/null; then
     return
   fi
-  # Fallback
   echo "$d"
 }
 
-# ── Validate inputs ───────────────────────────────────────────────────────────
+# Strip a leading # H1 heading (used as masthead — redundant in HTML output)
+strip_leading_heading() {
+  local file="$1"
+  local tmpfile
+  tmpfile="$(mktemp /tmp/briefing-XXXXXX.md)"
+  # Remove first line if it starts with "# "
+  awk 'NR==1 && /^# / { next } NR==2 && /^$/ { next } { print }' "$file" > "$tmpfile"
+  echo "$tmpfile"
+}
+
+# ── Resolve input → MDFILE + DATE ─────────────────────────────────────────────
 
 [[ $# -lt 1 ]] && usage
 
-command -v pandoc &>/dev/null || die "pandoc not found. Install with: brew install pandoc"
-
-MDFILE="$1"
 COMMIT_MSG="${2:-}"
+INPUT="$1"
 
-[[ -f "$MDFILE" ]] || die "File not found: $MDFILE"
+# If input looks like a bare date (YYYY-MM-DD), resolve to standard path
+if [[ "$INPUT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+  DATE="$INPUT"
+  if [[ -f "$BRIEFING_DIR/${DATE}_full.md" ]]; then
+    MDFILE="$BRIEFING_DIR/${DATE}_full.md"
+  elif [[ -f "$BRIEFING_DIR/${DATE}.md" ]]; then
+    MDFILE="$BRIEFING_DIR/${DATE}.md"
+  else
+    die "No briefing found for $DATE. Looked for:
+  $BRIEFING_DIR/${DATE}_full.md
+  $BRIEFING_DIR/${DATE}.md"
+  fi
+else
+  # Explicit file path — extract date from start of filename
+  MDFILE="$INPUT"
+  [[ -f "$MDFILE" ]] || die "File not found: $MDFILE"
+  BASENAME="$(basename "$MDFILE")"
+  if [[ "$BASENAME" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}) ]]; then
+    DATE="${BASH_REMATCH[1]}"
+  else
+    die "Filename must start with YYYY-MM-DD (got: $BASENAME)"
+  fi
+fi
 
-BASENAME="$(basename "$MDFILE" .md)"
-[[ "$BASENAME" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
-  || die "Filename must be YYYY-MM-DD.md (got: $(basename "$MDFILE"))"
-
-DATE="$BASENAME"
 DATE_FORMATTED="$(format_date "$DATE")"
-
 echo "Publishing briefing: $DATE_FORMATTED"
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
 mkdir -p "$SCRIPT_DIR/briefings" "$SCRIPT_DIR/md"
 
-# Copy markdown into the repo for future index.html regeneration
-cp "$MDFILE" "$SCRIPT_DIR/md/$DATE.md"
+# Strip leading H1 heading into a temp file for pandoc
+TMPFILE="$(strip_leading_heading "$MDFILE")"
+trap 'rm -f "$TMPFILE"' EXIT
+
+# Save a clean copy (heading stripped) into the repo's md/ for future regeneration
+cp "$TMPFILE" "$SCRIPT_DIR/md/$DATE.md"
 
 # ── Generate briefing page ────────────────────────────────────────────────────
 
 echo "→ briefings/$DATE.html"
 
-pandoc "$SCRIPT_DIR/md/$DATE.md" \
+pandoc "$TMPFILE" \
   --template="$SCRIPT_DIR/templates/briefing.html" \
   --variable="root:../" \
   --variable="date:$DATE_FORMATTED" \
@@ -132,6 +159,7 @@ cat <<'HTMLHEAD'
   <nav class="top-nav">
     <div class="nav-links">
       <a href="index.html">Latest</a>
+      <a href="search.html">Search</a>
     </div>
     <button id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
       <span class="show-light">◐ Dark</span>
@@ -176,6 +204,38 @@ cat <<'HTMLFOOT'
 HTMLFOOT
 } > "$SCRIPT_DIR/archive.html"
 
+# ── Generate search index ────────────────────────────────────────────────────
+
+echo "→ assets/search-index.json"
+
+{
+echo "["
+FIRST=true
+for mdfile in "$SCRIPT_DIR"/md/*.md; do
+  [[ -f "$mdfile" ]] || continue
+  d="$(basename "$mdfile" .md)"
+  [[ "$d" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+
+  # Read file content and JSON-escape it
+  TEXT="$(cat "$mdfile" | \
+    sed 's/^#\+[[:space:]]*//' | \
+    tr '\n' ' ' | \
+    sed 's/  */ /g' | \
+    sed 's/\\/\\\\/g' | \
+    sed 's/"/\\"/g' | \
+    sed 's/	/ /g')"
+
+  if [ "$FIRST" = true ]; then
+    FIRST=false
+  else
+    echo ","
+  fi
+  printf '  {"date":"%s","text":"%s"}' "$d" "$TEXT"
+done
+echo ""
+echo "]"
+} > "$SCRIPT_DIR/assets/search-index.json"
+
 # ── Git commit & push ─────────────────────────────────────────────────────────
 
 cd "$SCRIPT_DIR"
@@ -184,7 +244,9 @@ git add \
   "md/$DATE.md" \
   "briefings/$DATE.html" \
   "index.html" \
-  "archive.html"
+  "archive.html" \
+  "search.html" \
+  "assets/search-index.json"
 
 MSG="${COMMIT_MSG:-"Add briefing: $DATE_FORMATTED"}"
 git commit -m "$MSG"
@@ -195,5 +257,4 @@ git push
 echo ""
 echo "✓ Published: $DATE_FORMATTED"
 echo "  Briefing:  briefings/$DATE.html"
-echo "  Homepage:  index.html"
-echo "  Archive:   archive.html"
+echo "  Live at:   https://evanblake17.github.io/icfi-briefing-site/"
