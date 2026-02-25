@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>$if(title)$$title$ — $endif$Daily Briefing$if(isodate)$ · $isodate$$endif$</title>
+<script>(function(){
+  var t=localStorage.getItem('theme');
+  if(t){document.documentElement.setAttribute('data-theme',t);}
+  else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){
+    document.documentElement.setAttribute('data-theme','dark');
+  }
+})();</script>
+<link rel="stylesheet" href="$root$assets/style.css">
+</head>
+<body>
+<div class="page-wrapper">
+
+  <nav class="top-nav">
+    <div class="nav-links">
+$if(root)$
+      <a href="$root$index.html">Latest</a>
+$endif$
+      <a href="$root$archive.html">Archive</a>
+    </div>
+    <button id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+      <span class="show-light">◐ Dark</span>
+      <span class="show-dark">◑ Light</span>
+    </button>
+  </nav>
+
+  <header class="masthead">
+    <div class="masthead-rules-top"></div>
+    <h1 class="masthead-title">Daily Briefing</h1>
+$if(date)$
+    <p class="masthead-date">$date$</p>
+$endif$
+    <div class="masthead-rule-bottom"></div>
+  </header>
+
+  <main class="content">
+$body$
+  </main>
+
+  <footer class="site-footer">
+    <a href="$root$archive.html">← All Briefings</a>
+  </footer>
+
+</div>
+<script src="$root$assets/theme.js"></script>
+</body>
+</html>

@@ -1,0 +1,325 @@
+/* =============================================================
+   Daily Briefing — Stylesheet
+   ============================================================= */
+
+/* 1. Theme Tokens */
+:root {
+  --bg:           #f8f5ef;
+  --bg-secondary: #eeebe2;
+  --text:         #1a1a18;
+  --text-muted:   #5c5c58;
+  --link:         #7a0000;
+  --link-hover:   #b00000;
+  --border:       #1a1a18;
+  --border-light: #ccc8be;
+}
+
+[data-theme="dark"] {
+  --bg:           #1c1a17;
+  --bg-secondary: #252219;
+  --text:         #e2ddd4;
+  --text-muted:   #9a9288;
+  --link:         #c8a070;
+  --link-hover:   #e0b880;
+  --border:       #e2ddd4;
+  --border-light: #3a3630;
+}
+
+/* 2. Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 18px;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 3. Layout */
+.page-wrapper {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+/* 4. Top Navigation */
+.top-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nav-links {
+  display: flex;
+  gap: 20px;
+}
+
+.nav-links a {
+  color: var(--text);
+  text-decoration: none;
+  opacity: 0.65;
+  transition: opacity 0.15s;
+}
+
+.nav-links a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+#theme-toggle {
+  background: none;
+  border: 1px solid var(--border-light);
+  color: var(--text);
+  cursor: pointer;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+#theme-toggle:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.show-dark  { display: none; }
+[data-theme="dark"] .show-light { display: none; }
+[data-theme="dark"] .show-dark  { display: inline; }
+
+/* 5. Masthead / Nameplate */
+.masthead {
+  text-align: center;
+  padding: 24px 0 0;
+}
+
+.masthead-rules-top {
+  border-top: 4px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  height: 10px;
+  margin-bottom: 22px;
+}
+
+.masthead-title {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: clamp(1.9rem, 5.5vw, 3rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.masthead-date {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 11px;
+}
+
+.masthead-rule-bottom {
+  border-top: 1px solid var(--border);
+  margin-top: 22px;
+}
+
+/* 6. Main Content */
+.content {
+  padding: 36px 0 24px;
+}
+
+.content h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 36px;
+  margin-bottom: 14px;
+}
+
+.content h1:first-child { margin-top: 0; }
+
+.content h2 {
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 34px;
+  margin-bottom: 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.content h3 {
+  font-size: 1.08rem;
+  font-weight: 700;
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+
+.content p {
+  margin-bottom: 1.25em;
+}
+
+.content a {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.content a:hover {
+  color: var(--link-hover);
+}
+
+.content ul,
+.content ol {
+  margin: 0 0 1.25em 1.6em;
+}
+
+.content li {
+  margin-bottom: 0.45em;
+}
+
+.content li p {
+  margin-bottom: 0.4em;
+}
+
+.content blockquote {
+  border-left: 3px solid var(--border);
+  padding: 2px 20px;
+  margin: 22px 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.content blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border-light);
+  margin: 32px 0;
+}
+
+.content code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.88em;
+  background: var(--bg-secondary);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
+.content pre {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin-bottom: 1.25em;
+}
+
+.content pre code {
+  background: none;
+  padding: 0;
+}
+
+.content strong { font-weight: bold; }
+.content em     { font-style: italic; }
+
+/* 7. Archive List */
+.archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.archive-list li {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.archive-list li:first-child {
+  border-top: 1px solid var(--border-light);
+}
+
+.archive-list a {
+  display: flex;
+  align-items: center;
+  padding: 14px 4px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1.05rem;
+  transition: color 0.15s;
+}
+
+.archive-list a:hover {
+  color: var(--link);
+}
+
+.archive-list .entry-title {
+  flex: 1;
+}
+
+.archive-list .entry-date {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-left: 16px;
+  white-space: nowrap;
+}
+
+/* 8. Footer */
+.site-footer {
+  padding: 24px 0 52px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border-light);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.site-footer a {
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
+.site-footer a:hover {
+  color: var(--text);
+}
+
+/* 9. Empty / Welcome State */
+.empty-state {
+  text-align: center;
+  padding: 64px 0;
+  color: var(--text-muted);
+}
+
+.empty-state p {
+  font-style: italic;
+  margin-bottom: 0;
+}
+
+/* 10. Responsive */
+@media (max-width: 600px) {
+  html { font-size: 16px; }
+  .page-wrapper { padding: 0 18px; }
+  .masthead-title { font-size: 1.8rem; }
+}
