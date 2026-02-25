@@ -38,7 +38,7 @@
       <div class="auth-pending">
         <div class="auth-pending-icon">&#9203;</div>
         <p><strong>Account pending approval.</strong></p>
-        <p>Your request has been received. You will be able to sign in once your account is approved.</p>
+        <p>Your request has been received. You'll be able to sign in once your account is approved.</p>
       </div>
       <p class="auth-switch"><a id="show-login-pending" href="#">Back to sign in</a></p>
     </div>
@@ -66,10 +66,22 @@
   </header>
 
   <main class="content">
-    <ul class="archive-list">
-      <li><a href="briefings/2026-02-25.html"><span class="entry-title">February 25, 2026</span></a></li>
-      <li><a href="briefings/2026-02-24.html"><span class="entry-title">February 24, 2026</span></a></li>
-    </ul>
+    <div class="archive-accordion">
+  <div class="archive-year">
+    <button class="archive-year-toggle" aria-expanded="true" onclick="this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')==='true'?'false':'true')">
+      2026 <span class="toggle-icon">\u25BC</span>
+    </button>
+    <div class="archive-year-body" style="max-height:9999px">
+      <div class="archive-month">
+        <h3 class="archive-month-title">February</h3>
+        <ul class="archive-list">
+          <li><a href="briefings/2026-02-25.html"><span class="entry-title">February 25, 2026</span><span class="entry-weekday">Wednesday</span></a></li>
+          <li><a href="briefings/2026-02-24.html"><span class="entry-title">February 24, 2026</span><span class="entry-weekday">Tuesday</span></a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+    </div>
   </main>
 
   <footer class="site-footer">
