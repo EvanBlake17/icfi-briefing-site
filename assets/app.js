@@ -2,7 +2,14 @@
    Daily Briefing — Interactive Features
    • Reading progress bar
    • Table of contents
+   • Reading time estimate
+   • Section wrapping (alternating bands)
    • Text highlighting with notes (Supabase-backed)
+   • Highlight confirmation toast
+   • Quick-share section links
+   • Section bookmarking
+   • Enhanced notes panel
+   • Focus mode
    ============================================================= */
 (function () {
   'use strict';
@@ -17,6 +24,27 @@
     var el = document.querySelector('.masthead-date');
     if (el) return el.textContent.trim();
     return 'unknown';
+  }
+
+  function formatRelativeTime(ts) {
+    var now = Date.now();
+    var diff = now - ts;
+    var d = new Date(ts);
+    var today = new Date();
+    var sameDay = d.toDateString() === today.toDateString();
+    var hours = d.getHours();
+    var mins = d.getMinutes();
+    var ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    var timeStr = hours + ':' + (mins < 10 ? '0' : '') + mins + ' ' + ampm;
+
+    if (sameDay) return 'Today at ' + timeStr;
+    var yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday at ' + timeStr;
+
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + ' ' + d.getDate() + ' at ' + timeStr;
   }
 
   // ── 1. Reading Progress Bar ──────────────────────────────────
@@ -34,7 +62,86 @@
     update();
   }
 
-  // ── 2. Table of Contents ─────────────────────────────────────
+  // ── 2. Reading Time ──────────────────────────────────────────
+
+  function initReadingTime() {
+    var content = document.querySelector('.content');
+    if (!content) return;
+    var text = content.textContent || '';
+    var words = text.trim().split(/\s+/).length;
+    var minutes = Math.ceil(words / 230);
+
+    var meta = document.createElement('div');
+    meta.className = 'reading-meta';
+    meta.textContent = '~' + minutes + ' min read';
+
+    var masthead = document.querySelector('.masthead');
+    if (masthead) {
+      var ruleBottom = masthead.querySelector('.masthead-rule-bottom');
+      if (ruleBottom) {
+        masthead.insertBefore(meta, ruleBottom);
+      } else {
+        masthead.appendChild(meta);
+      }
+    }
+  }
+
+  // ── 3. Section Wrapping ──────────────────────────────────────
+
+  var briefingSections = [];
+
+  function wrapSections() {
+    var content = document.querySelector('.content');
+    if (!content) return;
+
+    var hrs = content.querySelectorAll(':scope > hr');
+    if (hrs.length === 0) return;
+
+    // Collect nodes between each hr into sections
+    var groups = [];
+    var currentGroup = [];
+    var children = Array.prototype.slice.call(content.childNodes);
+
+    children.forEach(function (node) {
+      if (node.nodeType === 1 && node.tagName === 'HR') {
+        if (currentGroup.length > 0) {
+          groups.push(currentGroup);
+        }
+        currentGroup = [];
+        // Keep hr in the DOM for visual divider — but place before next section
+        groups.push([node]);
+      } else {
+        currentGroup.push(node);
+      }
+    });
+    if (currentGroup.length > 0) {
+      groups.push(currentGroup);
+    }
+
+    // Rebuild: wrap non-hr groups into section elements
+    var altIndex = 0;
+    content.innerHTML = '';
+    groups.forEach(function (group) {
+      // If this group is just an HR, re-append it
+      if (group.length === 1 && group[0].nodeType === 1 && group[0].tagName === 'HR') {
+        content.appendChild(group[0]);
+        return;
+      }
+
+      var section = document.createElement('section');
+      section.className = 'briefing-section';
+      if (altIndex % 2 === 1) section.classList.add('alt');
+      altIndex++;
+
+      group.forEach(function (node) {
+        section.appendChild(node);
+      });
+      content.appendChild(section);
+      briefingSections.push(section);
+    });
+  }
+
+  // ── 4. Table of Contents ─────────────────────────────────────
 
   function initTOC() {
     var content = document.querySelector('.content');
@@ -100,7 +207,145 @@
     updateActive();
   }
 
-  // ── 3. Highlighting + Notes ──────────────────────────────────
+  // ── 5. Quick-Share Section Links ─────────────────────────────
+
+  function initShareLinks() {
+    var content = document.querySelector('.content');
+    if (!content) return;
+
+    var headings = content.querySelectorAll('h2[id], h3[id]');
+    headings.forEach(function (h) {
+      // Skip if already wrapped
+      if (h.parentNode.classList && h.parentNode.classList.contains('heading-wrapper')) return;
+
+      var wrapper = document.createElement('div');
+      wrapper.className = 'heading-wrapper';
+      h.parentNode.insertBefore(wrapper, h);
+      wrapper.appendChild(h);
+
+      var link = document.createElement('a');
+      link.className = 'share-link';
+      link.textContent = '#';
+      link.href = '#' + h.id;
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        var url = window.location.origin + window.location.pathname + '#' + h.id;
+        navigator.clipboard.writeText(url).then(function () {
+          var tip = document.createElement('span');
+          tip.className = 'share-copied';
+          tip.textContent = 'Copied!';
+          wrapper.appendChild(tip);
+          setTimeout(function () { tip.remove(); }, 1300);
+        });
+      });
+      wrapper.insertBefore(link, h);
+    });
+  }
+
+  // ── 6. Section Bookmarking ───────────────────────────────────
+
+  var bookmarks = {};
+  var bookmarkDate = '';
+
+  function initBookmarks() {
+    var content = document.querySelector('.content');
+    if (!content) return;
+
+    bookmarkDate = getBriefingDate();
+    var storageKey = 'bookmarks-' + bookmarkDate;
+    try { bookmarks = JSON.parse(localStorage.getItem(storageKey)) || {}; } catch (e) { bookmarks = {}; }
+
+    var headings = content.querySelectorAll('h2[id], h3[id]');
+    headings.forEach(function (h) {
+      var wrapper = h.closest('.heading-wrapper') || h.parentNode;
+
+      var star = document.createElement('span');
+      star.className = 'bookmark-star';
+      star.textContent = '\u2606'; // empty star
+      if (bookmarks[h.id]) {
+        star.classList.add('bookmarked');
+        star.textContent = '\u2605'; // filled star
+        h.classList.add('bookmarked-heading');
+      }
+
+      star.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (bookmarks[h.id]) {
+          delete bookmarks[h.id];
+          star.classList.remove('bookmarked');
+          star.textContent = '\u2606';
+          h.classList.remove('bookmarked-heading');
+        } else {
+          bookmarks[h.id] = h.textContent.replace(/[\u2606\u2605]/g, '').trim();
+          star.classList.add('bookmarked');
+          star.textContent = '\u2605';
+          h.classList.add('bookmarked-heading');
+        }
+        localStorage.setItem(storageKey, JSON.stringify(bookmarks));
+      });
+
+      // Append star after heading text
+      h.appendChild(star);
+    });
+  }
+
+  // ── 7. Focus Mode ────────────────────────────────────────────
+
+  var focusActive = false;
+
+  function initFocusMode() {
+    if (briefingSections.length < 2) return;
+
+    var navLinks = document.querySelector('.nav-links');
+    var btn = document.createElement('a');
+    btn.href = '#';
+    btn.className = 'focus-toggle';
+    btn.textContent = 'Focus';
+    navLinks.appendChild(btn);
+
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      toggleFocus();
+    });
+
+    function toggleFocus() {
+      focusActive = !focusActive;
+      document.body.classList.toggle('focus-mode', focusActive);
+      btn.classList.toggle('active', focusActive);
+      if (focusActive) updateFocusedSection();
+    }
+
+    function updateFocusedSection() {
+      if (!focusActive) return;
+      var best = briefingSections[0];
+      var bestDist = Infinity;
+      briefingSections.forEach(function (sec) {
+        var rect = sec.getBoundingClientRect();
+        var dist = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2);
+        if (dist < bestDist) { bestDist = dist; best = sec; }
+      });
+      briefingSections.forEach(function (sec) {
+        sec.classList.toggle('section-focused', sec === best);
+      });
+    }
+
+    window.addEventListener('scroll', function () {
+      if (focusActive) requestAnimationFrame(updateFocusedSection);
+    }, { passive: true });
+
+    // Keyboard shortcut: F key
+    document.addEventListener('keydown', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.key === 'f' || e.key === 'F') {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          toggleFocus();
+        }
+      }
+    });
+  }
+
+  // ── 8. Highlighting + Notes ──────────────────────────────────
 
   function initHighlighter() {
     var content = document.querySelector('.content');
@@ -132,7 +377,8 @@
                 text: row.text,
                 sectionId: row.section_id,
                 sectionTitle: row.section_title,
-                ts: new Date(row.created_at).getTime()
+                ts: new Date(row.created_at).getTime(),
+                annotation: row.annotation || ''
               };
             });
             return highlightsCache;
@@ -160,6 +406,7 @@
         }).select().single().then(function (res) {
           if (res.data) {
             hl.id = res.data.id;
+            hl.ts = new Date(res.data.created_at).getTime();
             highlightsCache.push(hl);
           }
           return hl;
@@ -167,6 +414,7 @@
       }
       // localStorage fallback
       hl.id = hl.id || ('hl-' + Date.now());
+      hl.ts = hl.ts || Date.now();
       highlightsCache.push(hl);
       saveToLocal();
       return Promise.resolve(hl);
@@ -192,6 +440,20 @@
       return Promise.resolve();
     }
 
+    function updateAnnotation(hlId, text) {
+      var hl = highlightsCache.find(function (h) { return h.id === hlId; });
+      if (hl) hl.annotation = text;
+      if (useSupabase) {
+        return sb.from('highlights').update({ annotation: text }).eq('id', hlId)
+          .then(function () {})
+          .catch(function () {
+            // annotation column might not exist yet — silently ignore
+          });
+      }
+      saveToLocal();
+      return Promise.resolve();
+    }
+
     // --- Badge ---
     var navLinks = document.querySelector('.nav-links');
     var notesBtn = document.createElement('a');
@@ -202,6 +464,65 @@
     function updateBadge() {
       var n = highlightsCache.length;
       notesBtn.textContent = n ? 'Notes (' + n + ')' : 'Notes';
+    }
+
+    // --- Toast notification ---
+
+    var currentToast = null;
+    var toastTimer = null;
+
+    function showToastNotification(hl) {
+      // Remove existing toast
+      if (currentToast) {
+        currentToast.remove();
+        clearTimeout(toastTimer);
+      }
+
+      var toast = document.createElement('div');
+      toast.className = 'hl-toast';
+
+      var msg = document.createElement('span');
+      msg.className = 'hl-toast-msg';
+      msg.textContent = 'Highlight saved';
+      toast.appendChild(msg);
+
+      var actions = document.createElement('div');
+      actions.className = 'hl-toast-actions';
+
+      var viewBtn = document.createElement('button');
+      viewBtn.textContent = 'Notes';
+      viewBtn.addEventListener('click', function () {
+        dismissToast(toast);
+        toggleNotesPanel();
+      });
+      actions.appendChild(viewBtn);
+
+      var undoBtn = document.createElement('button');
+      undoBtn.textContent = 'Undo';
+      undoBtn.addEventListener('click', function () {
+        dismissToast(toast);
+        unwrapHighlight(hl.id);
+        deleteHL(hl.id).then(function () { updateBadge(); });
+      });
+      actions.appendChild(undoBtn);
+
+      toast.appendChild(actions);
+      document.body.appendChild(toast);
+      currentToast = toast;
+
+      toastTimer = setTimeout(function () {
+        dismissToast(toast);
+      }, 4000);
+    }
+
+    function dismissToast(toast) {
+      if (!toast || !toast.parentNode) return;
+      toast.classList.add('removing');
+      setTimeout(function () {
+        if (toast.parentNode) toast.remove();
+      }, 150);
+      if (toast === currentToast) currentToast = null;
+      clearTimeout(toastTimer);
     }
 
     // --- Tooltip ---
@@ -258,8 +579,8 @@
       sel.removeAllRanges();
       tooltip.style.display = 'none';
 
-      // Save to Supabase
-      var hl = { id: tempId, text: text, sectionId: section.id, sectionTitle: section.title, ts: Date.now() };
+      // Save
+      var hl = { id: tempId, text: text, sectionId: section.id, sectionTitle: section.title, ts: Date.now(), annotation: '' };
       insertHL(hl).then(function (saved) {
         // Update the DOM mark elements with the real server ID
         if (saved.id !== tempId) {
@@ -268,6 +589,7 @@
           });
         }
         updateBadge();
+        showToastNotification(saved);
       });
     });
 
@@ -330,7 +652,12 @@
         var prev = el.previousElementSibling;
         while (prev) {
           if (/^H[23]$/.test(prev.tagName) && prev.id) {
-            return { id: prev.id, title: prev.textContent };
+            return { id: prev.id, title: prev.textContent.replace(/[\u2606\u2605]/g, '').trim() };
+          }
+          // Check inside heading-wrapper
+          if (prev.classList && prev.classList.contains('heading-wrapper')) {
+            var h = prev.querySelector('h2[id], h3[id]');
+            if (h) return { id: h.id, title: h.textContent.replace(/[\u2606\u2605]/g, '').trim() };
           }
           prev = prev.previousElementSibling;
         }
@@ -383,11 +710,20 @@
 
     restore();
 
-    // --- Notes panel ---
+    // --- Notes panel (enhanced) ---
 
     notesBtn.addEventListener('click', function (e) {
       e.preventDefault();
       toggleNotesPanel();
+    });
+
+    // Keyboard shortcut: Shift+N
+    document.addEventListener('keydown', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.key === 'N' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        toggleNotesPanel();
+      }
     });
 
     function toggleNotesPanel() {
@@ -411,36 +747,126 @@
       header.appendChild(closeBtn);
       panel.appendChild(header);
 
+      // Search/filter bar
+      var searchWrap = document.createElement('div');
+      searchWrap.className = 'notes-search';
+      var searchInput = document.createElement('input');
+      searchInput.type = 'text';
+      searchInput.placeholder = 'Filter highlights...';
+      searchWrap.appendChild(searchInput);
+      panel.appendChild(searchWrap);
+
+      var body = document.createElement('div');
+      body.className = 'notes-body';
+
+      // Build bookmarks section at top (if any bookmarks exist)
+      var bmKeys = Object.keys(bookmarks);
+      if (bmKeys.length > 0) {
+        var bmSection = document.createElement('div');
+        bmSection.className = 'notes-bookmarks';
+        var bmH4 = document.createElement('h4');
+        bmH4.textContent = '\u2605 Bookmarks';
+        bmSection.appendChild(bmH4);
+        bmKeys.forEach(function (id) {
+          var item = document.createElement('div');
+          item.className = 'notes-bookmark-item';
+          var a = document.createElement('a');
+          a.textContent = bookmarks[id];
+          a.addEventListener('click', function () {
+            var heading = document.getElementById(id);
+            if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          item.appendChild(a);
+          bmSection.appendChild(item);
+        });
+        body.appendChild(bmSection);
+      }
+
       if (!highlights.length) {
         var empty = document.createElement('p');
         empty.className = 'notes-empty';
         empty.textContent = 'No highlights yet. Select text in the briefing and click "Highlight."';
-        panel.appendChild(empty);
+        body.appendChild(empty);
       } else {
         // Group by section
         var sections = {};
+        var sectionOrder = [];
         highlights.forEach(function (h) {
           var key = h.sectionTitle || 'General';
-          if (!sections[key]) sections[key] = [];
-          sections[key].push(h);
+          if (!sections[key]) {
+            sections[key] = { id: h.sectionId, items: [] };
+            sectionOrder.push(key);
+          }
+          sections[key].items.push(h);
         });
 
-        var body = document.createElement('div');
-        body.className = 'notes-body';
-
-        Object.keys(sections).forEach(function (sec) {
+        sectionOrder.forEach(function (sec) {
           var div = document.createElement('div');
           div.className = 'notes-section';
+          div.dataset.section = sec;
+
+          // Section header with count and click-to-scroll
+          var headerDiv = document.createElement('div');
+          headerDiv.className = 'notes-section-header';
           var h4 = document.createElement('h4');
           h4.textContent = sec;
-          div.appendChild(h4);
+          headerDiv.appendChild(h4);
+          var count = document.createElement('span');
+          count.className = 'notes-count';
+          count.textContent = sections[sec].items.length;
+          headerDiv.appendChild(count);
 
-          sections[sec].forEach(function (hl) {
+          headerDiv.addEventListener('click', function () {
+            var targetId = sections[sec].id;
+            if (targetId) {
+              var heading = document.getElementById(targetId);
+              if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          });
+          div.appendChild(headerDiv);
+
+          sections[sec].items.forEach(function (hl) {
             var item = document.createElement('div');
             item.className = 'notes-item';
+            item.dataset.hlId = hl.id;
+
+            // Timestamp
+            if (hl.ts) {
+              var tsDiv = document.createElement('div');
+              tsDiv.className = 'notes-timestamp';
+              tsDiv.textContent = formatRelativeTime(hl.ts);
+              item.appendChild(tsDiv);
+            }
+
             var p = document.createElement('p');
             p.textContent = hl.text;
             item.appendChild(p);
+
+            // Annotation
+            var annoDiv = document.createElement('div');
+            annoDiv.className = 'notes-annotation';
+            if (hl.annotation) {
+              var annoText = document.createElement('div');
+              annoText.className = 'notes-annotation-text';
+              annoText.textContent = hl.annotation;
+              annoText.title = 'Click to edit';
+              annoText.addEventListener('click', function () {
+                annoDiv.innerHTML = '';
+                showAnnotationEditor(annoDiv, hl);
+              });
+              annoDiv.appendChild(annoText);
+            } else {
+              var addNote = document.createElement('button');
+              addNote.className = 'notes-add-note';
+              addNote.textContent = 'Add note...';
+              addNote.addEventListener('click', function () {
+                annoDiv.innerHTML = '';
+                showAnnotationEditor(annoDiv, hl);
+              });
+              annoDiv.appendChild(addNote);
+            }
+            item.appendChild(annoDiv);
+
             var rm = document.createElement('button');
             rm.className = 'notes-remove';
             rm.textContent = 'Remove';
@@ -449,7 +875,13 @@
               deleteHL(hl.id).then(function () {
                 item.remove();
                 updateBadge();
-                if (!div.querySelector('.notes-item')) div.remove();
+                // Update count
+                var remaining = div.querySelectorAll('.notes-item');
+                if (remaining.length === 0) {
+                  div.remove();
+                } else {
+                  count.textContent = remaining.length;
+                }
                 if (!body.querySelector('.notes-item')) {
                   body.innerHTML = '<p class="notes-empty">All highlights cleared.</p>';
                 }
@@ -460,46 +892,190 @@
           });
           body.appendChild(div);
         });
-        panel.appendChild(body);
+      }
+      panel.appendChild(body);
 
-        // Actions
-        var actions = document.createElement('div');
-        actions.className = 'notes-actions';
+      // Filter logic
+      searchInput.addEventListener('input', function () {
+        var q = searchInput.value.toLowerCase();
+        var items = body.querySelectorAll('.notes-item');
+        var secs = body.querySelectorAll('.notes-section');
 
-        var copyBtn = document.createElement('button');
-        copyBtn.className = 'notes-copy';
-        copyBtn.textContent = 'Copy All';
-        copyBtn.addEventListener('click', function () {
-          var out = 'Notes \u2014 Daily Briefing ' + briefingDate + '\n\n';
-          Object.keys(sections).forEach(function (sec) {
+        items.forEach(function (item) {
+          var text = item.textContent.toLowerCase();
+          item.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+        });
+
+        // Show/hide section headers based on visible items
+        secs.forEach(function (sec) {
+          var visible = sec.querySelectorAll('.notes-item:not([style*="display: none"])');
+          sec.style.display = visible.length > 0 ? '' : 'none';
+        });
+
+        // Bookmarks section
+        var bmSec = body.querySelector('.notes-bookmarks');
+        if (bmSec) {
+          if (!q) { bmSec.style.display = ''; return; }
+          var bmItems = bmSec.querySelectorAll('.notes-bookmark-item');
+          var bmVisible = false;
+          bmItems.forEach(function (item) {
+            var match = item.textContent.toLowerCase().indexOf(q) !== -1;
+            item.style.display = match ? '' : 'none';
+            if (match) bmVisible = true;
+          });
+          bmSec.style.display = bmVisible ? '' : 'none';
+        }
+      });
+
+      // Actions
+      var actions = document.createElement('div');
+      actions.className = 'notes-actions';
+
+      // Export dropdown
+      var exportWrap = document.createElement('div');
+      exportWrap.className = 'notes-export-wrap';
+      var exportBtn = document.createElement('button');
+      exportBtn.className = 'notes-export-btn';
+      exportBtn.textContent = 'Export \u25B4';
+      exportWrap.appendChild(exportBtn);
+
+      var exportMenu = document.createElement('div');
+      exportMenu.className = 'notes-export-menu';
+
+      function buildExport(format) {
+        var out = '';
+        if (format === 'markdown') {
+          out = '# Notes \u2014 Daily Briefing ' + briefingDate + '\n\n';
+          sectionOrder.forEach(function (sec) {
             out += '## ' + sec + '\n\n';
-            sections[sec].forEach(function (hl) {
-              out += '> ' + hl.text + '\n\n';
+            sections[sec].items.forEach(function (hl) {
+              out += '> ' + hl.text + '\n';
+              if (hl.annotation) out += '\n*' + hl.annotation + '*\n';
+              out += '\n';
             });
           });
-          navigator.clipboard.writeText(out).then(function () {
-            copyBtn.textContent = 'Copied!';
-            setTimeout(function () { copyBtn.textContent = 'Copy All'; }, 1500);
+        } else if (format === 'plaintext') {
+          out = 'Notes \u2014 Daily Briefing ' + briefingDate + '\n\n';
+          sectionOrder.forEach(function (sec) {
+            out += sec.toUpperCase() + '\n' + '-'.repeat(sec.length) + '\n\n';
+            sections[sec].items.forEach(function (hl) {
+              out += '\u201c' + hl.text + '\u201d\n';
+              if (hl.annotation) out += '  Note: ' + hl.annotation + '\n';
+              out += '\n';
+            });
           });
-        });
-        actions.appendChild(copyBtn);
-
-        var clearBtn = document.createElement('button');
-        clearBtn.className = 'notes-clear';
-        clearBtn.textContent = 'Clear All';
-        clearBtn.addEventListener('click', function () {
-          if (!confirm('Remove all highlights from this briefing?')) return;
-          highlights.forEach(function (hl) { unwrapHighlight(hl.id); });
-          clearAllHL().then(function () {
-            updateBadge();
-            panel.remove();
+        } else if (format === 'html') {
+          out = '<h1>Notes \u2014 Daily Briefing ' + briefingDate + '</h1>\n';
+          sectionOrder.forEach(function (sec) {
+            out += '<h2>' + sec + '</h2>\n';
+            sections[sec].items.forEach(function (hl) {
+              out += '<blockquote>' + hl.text + '</blockquote>\n';
+              if (hl.annotation) out += '<p><em>' + hl.annotation + '</em></p>\n';
+            });
           });
-        });
-        actions.appendChild(clearBtn);
-        panel.appendChild(actions);
+        }
+        return out;
       }
 
+      ['Markdown', 'Plain Text', 'HTML'].forEach(function (label) {
+        var optBtn = document.createElement('button');
+        optBtn.textContent = label;
+        optBtn.addEventListener('click', function () {
+          var format = label.toLowerCase().replace(' ', '');
+          if (format === 'plaintext') format = 'plaintext';
+          var text = buildExport(format);
+          navigator.clipboard.writeText(text).then(function () {
+            exportBtn.textContent = 'Copied!';
+            exportMenu.classList.remove('open');
+            setTimeout(function () { exportBtn.textContent = 'Export \u25B4'; }, 1500);
+          });
+        });
+        exportMenu.appendChild(optBtn);
+      });
+      exportWrap.appendChild(exportMenu);
+
+      exportBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        exportMenu.classList.toggle('open');
+      });
+
+      // Close menu on outside click
+      document.addEventListener('click', function () {
+        exportMenu.classList.remove('open');
+      });
+
+      actions.appendChild(exportWrap);
+
+      var clearBtn = document.createElement('button');
+      clearBtn.className = 'notes-clear';
+      clearBtn.textContent = 'Clear All';
+      clearBtn.addEventListener('click', function () {
+        if (!confirm('Remove all highlights from this briefing?')) return;
+        highlights.forEach(function (hl) { unwrapHighlight(hl.id); });
+        clearAllHL().then(function () {
+          updateBadge();
+          panel.remove();
+        });
+      });
+      actions.appendChild(clearBtn);
+      panel.appendChild(actions);
+
       document.body.appendChild(panel);
+
+      // Local references for export - need sections/sectionOrder in scope
+      var sectionOrder = [];
+      var sections = {};
+      highlights.forEach(function (h) {
+        var key = h.sectionTitle || 'General';
+        if (!sections[key]) {
+          sections[key] = { id: h.sectionId, items: [] };
+          sectionOrder.push(key);
+        }
+        sections[key].items.push(h);
+      });
+    }
+
+    function showAnnotationEditor(container, hl) {
+      var textarea = document.createElement('textarea');
+      textarea.value = hl.annotation || '';
+      textarea.placeholder = 'Add a note about this highlight...';
+      container.appendChild(textarea);
+      textarea.focus();
+
+      var saveTimer = null;
+      textarea.addEventListener('input', function () {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(function () {
+          hl.annotation = textarea.value;
+          updateAnnotation(hl.id, textarea.value);
+        }, 500);
+      });
+
+      textarea.addEventListener('blur', function () {
+        hl.annotation = textarea.value;
+        updateAnnotation(hl.id, textarea.value);
+        container.innerHTML = '';
+        if (hl.annotation) {
+          var annoText = document.createElement('div');
+          annoText.className = 'notes-annotation-text';
+          annoText.textContent = hl.annotation;
+          annoText.title = 'Click to edit';
+          annoText.addEventListener('click', function () {
+            container.innerHTML = '';
+            showAnnotationEditor(container, hl);
+          });
+          container.appendChild(annoText);
+        } else {
+          var addNote = document.createElement('button');
+          addNote.className = 'notes-add-note';
+          addNote.textContent = 'Add note...';
+          addNote.addEventListener('click', function () {
+            container.innerHTML = '';
+            showAnnotationEditor(container, hl);
+          });
+          container.appendChild(addNote);
+        }
+      });
     }
   }
 
@@ -515,9 +1091,16 @@
     // Only run on briefing pages (not archive, search)
     if (!document.querySelector('.content h2')) return;
 
+    // Section wrapping (must run first — before TOC reads headings)
+    wrapSections();
+
     // Progress bar and TOC work without auth
     initProgress();
+    initReadingTime();
     initTOC();
+    initShareLinks();
+    initBookmarks();
+    initFocusMode();
 
     var auth = window.briefingAuth;
 

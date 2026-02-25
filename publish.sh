@@ -206,13 +206,73 @@ cat <<'HTMLHEAD'
   </header>
 
   <main class="content">
-    <ul class="archive-list">
+    <div class="archive-accordion">
 HTMLHEAD
 
-# List briefings newest-first
+# List briefings newest-first, grouped by Year → Month
+PREV_YEAR=""
+PREV_MONTH=""
+CURRENT_YEAR="$(date +%Y)"
+CURRENT_MONTH="$(date +%m)"
+MONTH_NAMES=("" "January" "February" "March" "April" "May" "June" "July" "August" "September" "October" "November" "December")
+
 while IFS= read -r d; do
+  YEAR="${d:0:4}"
+  MONTH="${d:5:2}"
+  MONTH_NUM=$((10#$MONTH))
+  MONTH_NAME="${MONTH_NAMES[$MONTH_NUM]}"
+
+  # New year group?
+  if [[ "$YEAR" != "$PREV_YEAR" ]]; then
+    # Close previous month and year if open
+    if [[ -n "$PREV_YEAR" ]]; then
+      echo "        </ul>"
+      echo "      </div>"    # close archive-month
+      echo "    </div>"      # close archive-year-body
+      echo "  </div>"        # close archive-year
+    fi
+
+    # Determine if this year should be expanded (current year = expanded)
+    if [[ "$YEAR" == "$CURRENT_YEAR" ]]; then
+      YEAR_EXPANDED="true"
+    else
+      YEAR_EXPANDED="false"
+    fi
+
+    echo "  <div class=\"archive-year\">"
+    echo "    <button class=\"archive-year-toggle\" aria-expanded=\"$YEAR_EXPANDED\" onclick=\"this.setAttribute('aria-expanded',this.getAttribute('aria-expanded')==='true'?'false':'true')\">"
+    echo "      $YEAR <span class=\"toggle-icon\">\u25BC</span>"
+    echo "    </button>"
+    echo "    <div class=\"archive-year-body\" style=\"max-height:9999px\">"
+    PREV_MONTH=""
+  fi
+
+  # New month group?
+  if [[ "$MONTH" != "$PREV_MONTH" ]]; then
+    # Close previous month if open
+    if [[ -n "$PREV_MONTH" && "$YEAR" == "$PREV_YEAR" ]]; then
+      echo "        </ul>"
+      echo "      </div>"    # close archive-month
+    fi
+    echo "      <div class=\"archive-month\">"
+    echo "        <h3 class=\"archive-month-title\">$MONTH_NAME</h3>"
+    echo "        <ul class=\"archive-list\">"
+  fi
+
   formatted="$(format_date "$d")"
-  echo "      <li><a href=\"briefings/$d.html\"><span class=\"entry-title\">$formatted</span></a></li>"
+  # Get weekday name
+  if weekday=$(date -j -f "%Y-%m-%d" "$d" "+%A" 2>/dev/null); then
+    :
+  elif weekday=$(date -d "$d" "+%A" 2>/dev/null); then
+    :
+  else
+    weekday=""
+  fi
+
+  echo "          <li><a href=\"briefings/$d.html\"><span class=\"entry-title\">$formatted</span><span class=\"entry-weekday\">$weekday</span></a></li>"
+
+  PREV_YEAR="$YEAR"
+  PREV_MONTH="$MONTH"
 done < <(
   ls "$SCRIPT_DIR/briefings/" 2>/dev/null \
     | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}\.html$' \
@@ -220,8 +280,16 @@ done < <(
     | sort -r
 )
 
+# Close final month and year
+if [[ -n "$PREV_YEAR" ]]; then
+  echo "        </ul>"
+  echo "      </div>"    # close archive-month
+  echo "    </div>"      # close archive-year-body
+  echo "  </div>"        # close archive-year
+fi
+
 cat <<'HTMLFOOT'
-    </ul>
+    </div>
   </main>
 
   <footer class="site-footer">

@@ -25,8 +25,8 @@
   --link-hover:   #e0b880;
   --border:       #e2ddd4;
   --border-light: #3a3630;
-  --hl-bg:        rgba(190, 150, 60, 0.30);
-  --hl-bg-hover:  rgba(190, 150, 60, 0.50);
+  --hl-bg:        rgba(200, 160, 60, 0.35);
+  --hl-bg-hover:  rgba(200, 160, 60, 0.55);
 }
 
 /* 2. Reset & Base */
@@ -160,19 +160,32 @@ body {
 .content h1:first-child { margin-top: 0; }
 
 .content h2 {
-  font-size: 1.28rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.3;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-muted);
   margin-top: 34px;
-  margin-bottom: 10px;
-  padding-bottom: 7px;
+  margin-bottom: 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-light);
   border-bottom: 1px solid var(--border-light);
 }
 
+.content hr + h2 {
+  margin-top: 12px;
+}
+
+.content h2 + h3 {
+  margin-top: 16px;
+}
+
 .content h3 {
-  font-size: 1.08rem;
+  font-size: 1.12rem;
   font-weight: 700;
-  margin-top: 24px;
+  margin-top: 32px;
   margin-bottom: 8px;
 }
 
@@ -219,7 +232,7 @@ body {
 .content hr {
   border: none;
   border-top: 1px solid var(--border-light);
-  margin: 32px 0;
+  margin: 48px 0 12px;
 }
 
 .content code {
@@ -403,10 +416,11 @@ body {
 
 .user-highlight {
   background: var(--hl-bg);
+  color: var(--text);
   padding: 1px 0;
   border-radius: 2px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .user-highlight:hover {
@@ -691,12 +705,506 @@ body {
 
 .search-result-excerpt mark {
   background: var(--hl-bg);
+  color: var(--text);
   padding: 1px 2px;
   border-radius: 2px;
 }
 
 /* =============================================================
-   15. Auth Overlay
+   15. Section Wrapping & Alternating Bands
+   ============================================================= */
+
+.briefing-section {
+  padding: 0 28px;
+  margin: 0 -28px;
+  transition: opacity 0.35s ease;
+}
+
+.briefing-section.alt {
+  background: var(--bg-secondary);
+}
+
+/* =============================================================
+   16. Highlight Toast
+   ============================================================= */
+
+.hl-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 11000;
+  background: var(--text);
+  color: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  padding: 12px 18px;
+  border-radius: 3px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  animation: toastIn 0.2s ease-out;
+  max-width: 360px;
+}
+
+.hl-toast.removing {
+  animation: toastOut 0.15s ease-in forwards;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-10px); }
+}
+
+.hl-toast-msg {
+  flex: 1;
+  font-weight: 600;
+}
+
+.hl-toast-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hl-toast-actions button {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.3);
+  color: inherit;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.hl-toast-actions button:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* =============================================================
+   17. Reading Meta (reading time)
+   ============================================================= */
+
+.reading-meta {
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 6px;
+  padding-bottom: 4px;
+}
+
+/* =============================================================
+   18. Quick-Share Section Links
+   ============================================================= */
+
+.heading-wrapper {
+  position: relative;
+}
+
+.share-link {
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+
+.heading-wrapper:hover .share-link {
+  opacity: 0.5;
+}
+
+.share-link:hover {
+  opacity: 1 !important;
+  color: var(--link);
+}
+
+.share-copied {
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  transform: translateY(-50%) translateY(-24px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--link);
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  animation: copiedFade 1.2s ease-out forwards;
+}
+
+@keyframes copiedFade {
+  0%   { opacity: 0; transform: translateY(-50%) translateY(-24px); }
+  15%  { opacity: 1; transform: translateY(-50%) translateY(-28px); }
+  80%  { opacity: 1; transform: translateY(-50%) translateY(-28px); }
+  100% { opacity: 0; transform: translateY(-50%) translateY(-32px); }
+}
+
+/* =============================================================
+   19. Section Bookmarking
+   ============================================================= */
+
+.bookmark-star {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.3;
+  transition: opacity 0.15s, color 0.15s;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.heading-wrapper:hover .bookmark-star {
+  opacity: 0.6;
+}
+
+.bookmark-star:hover {
+  opacity: 1 !important;
+}
+
+.bookmark-star.bookmarked {
+  color: #c8a040;
+  opacity: 1 !important;
+}
+
+.bookmarked-heading {
+  border-left: 3px solid #c8a040;
+  padding-left: 10px;
+  margin-left: -13px;
+}
+
+/* Bookmarks group in notes panel */
+.notes-bookmarks {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.notes-bookmarks h4 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c8a040;
+  margin: 4px 0 8px;
+  padding-bottom: 4px;
+}
+
+.notes-bookmark-item {
+  padding: 4px 0;
+  font-size: 12.5px;
+}
+
+.notes-bookmark-item a {
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.notes-bookmark-item a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+/* =============================================================
+   20. Focus Mode
+   ============================================================= */
+
+.focus-toggle {
+  cursor: pointer;
+}
+
+.focus-toggle.active {
+  font-weight: 700;
+  color: var(--link) !important;
+  opacity: 1 !important;
+}
+
+body.focus-mode .briefing-section {
+  opacity: 0.12;
+  transition: opacity 0.35s ease;
+}
+
+body.focus-mode .briefing-section.section-focused {
+  opacity: 1;
+}
+
+/* Items hidden during focus mode */
+body.focus-mode .content > hr {
+  opacity: 0.12;
+  transition: opacity 0.35s ease;
+}
+
+/* =============================================================
+   21. Enhanced Notes Panel additions
+   ============================================================= */
+
+.notes-search {
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.notes-search input {
+  width: 100%;
+  padding: 6px 10px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  outline: none;
+}
+
+.notes-search input:focus {
+  border-color: var(--border);
+}
+
+.notes-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.notes-timestamp {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
+}
+
+.notes-annotation {
+  margin-top: 6px;
+}
+
+.notes-annotation textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  outline: none;
+  resize: vertical;
+}
+
+.notes-annotation textarea:focus {
+  border-color: var(--border);
+}
+
+.notes-annotation-text {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.notes-annotation-text:hover {
+  color: var(--text);
+}
+
+.notes-add-note {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  cursor: pointer;
+  padding: 2px 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.notes-item:hover .notes-add-note {
+  opacity: 1;
+}
+
+.notes-add-note:hover {
+  color: var(--link);
+}
+
+.notes-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.notes-section-header:hover h4 {
+  color: var(--link);
+}
+
+.notes-count {
+  display: inline-block;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+/* Export dropdown */
+.notes-export-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.notes-export-btn {
+  width: 100%;
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text) !important;
+}
+
+.notes-export-btn:hover {
+  opacity: 0.85;
+}
+
+.notes-export-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.10);
+  margin-bottom: 4px;
+  display: none;
+  z-index: 1;
+}
+
+.notes-export-menu.open {
+  display: block;
+}
+
+.notes-export-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.notes-export-menu button:hover {
+  background: var(--bg-secondary);
+}
+
+/* =============================================================
+   22. Archive Accordion
+   ============================================================= */
+
+.archive-accordion {
+  margin: 0;
+  padding: 0;
+}
+
+.archive-year {
+  margin-bottom: 8px;
+}
+
+.archive-year-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 2px solid var(--border);
+  padding: 14px 0 8px;
+  cursor: pointer;
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: left;
+}
+
+.archive-year-toggle:hover {
+  color: var(--link);
+}
+
+.archive-year-toggle .toggle-icon {
+  margin-left: 10px;
+  font-size: 0.7em;
+  transition: transform 0.2s;
+  color: var(--text-muted);
+}
+
+.archive-year-toggle[aria-expanded="false"] .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.archive-year-body {
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.archive-year-toggle[aria-expanded="false"] + .archive-year-body {
+  max-height: 0 !important;
+}
+
+.archive-month {
+  margin-bottom: 4px;
+}
+
+.archive-month-title {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 16px 0 4px;
+  padding-bottom: 4px;
+}
+
+.archive-list .entry-weekday {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  margin-left: auto;
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+/* =============================================================
+   23. Auth Overlay
    ============================================================= */
 
 /* Hide page content when auth is active */
@@ -880,11 +1388,26 @@ body {
   .top-nav,
   .toc-panel,
   .highlight-tooltip,
+  .hl-toast,
   .notes-panel,
   .site-footer,
+  .share-link,
+  .bookmark-star,
+  .reading-meta,
   #auth-overlay,
   #logout-btn {
     display: none !important;
+  }
+
+  .briefing-section,
+  .briefing-section.alt {
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.focus-mode .briefing-section {
+    opacity: 1 !important;
   }
 
   body {
@@ -929,6 +1452,7 @@ body {
 
   .user-highlight {
     background: #ffd !important;
+    color: #000 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -967,5 +1491,22 @@ body {
 
   .toc-panel .toc-h3 a {
     padding-left: 28px;
+  }
+
+  .briefing-section {
+    padding: 0 18px;
+    margin: 0 -18px;
+  }
+
+  .share-link {
+    left: -20px;
+    font-size: 12px;
+  }
+
+  .hl-toast {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
   }
 }
