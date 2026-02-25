@@ -2,7 +2,7 @@
    Daily Briefing — Interactive Features
    • Reading progress bar
    • Table of contents
-   • Text highlighting with notes
+   • Text highlighting with notes (Supabase-backed)
    ============================================================= */
 (function () {
   'use strict';
@@ -106,15 +106,91 @@
     var content = document.querySelector('.content');
     if (!content) return;
 
+    var auth = window.briefingAuth || {};
+    var sb = auth.supabase;
+    var useSupabase = auth.authEnabled && sb && auth.user;
     var briefingDate = getBriefingDate();
-    var STORE_KEY = 'highlights-' + briefingDate;
 
-    // --- Storage ---
-    function load() {
-      try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
-      catch (e) { return []; }
+    // In-memory cache of highlights for current page
+    var highlightsCache = [];
+    var storageKey = 'highlights-' + briefingDate;
+
+    // --- Storage layer (Supabase or localStorage) ---
+
+    function loadFromDB() {
+      if (useSupabase) {
+        return sb
+          .from('highlights')
+          .select('*')
+          .eq('user_id', auth.user.id)
+          .eq('briefing_date', briefingDate)
+          .order('created_at', { ascending: true })
+          .then(function (res) {
+            highlightsCache = (res.data || []).map(function (row) {
+              return {
+                id: row.id,
+                text: row.text,
+                sectionId: row.section_id,
+                sectionTitle: row.section_title,
+                ts: new Date(row.created_at).getTime()
+              };
+            });
+            return highlightsCache;
+          });
+      }
+      // localStorage fallback
+      try {
+        highlightsCache = JSON.parse(localStorage.getItem(storageKey)) || [];
+      } catch (e) { highlightsCache = []; }
+      return Promise.resolve(highlightsCache);
     }
-    function save(arr) { localStorage.setItem(STORE_KEY, JSON.stringify(arr)); }
+
+    function saveToLocal() {
+      localStorage.setItem(storageKey, JSON.stringify(highlightsCache));
+    }
+
+    function insertHL(hl) {
+      if (useSupabase) {
+        return sb.from('highlights').insert({
+          user_id: auth.user.id,
+          briefing_date: briefingDate,
+          text: hl.text,
+          section_id: hl.sectionId || null,
+          section_title: hl.sectionTitle || null
+        }).select().single().then(function (res) {
+          if (res.data) {
+            hl.id = res.data.id;
+            highlightsCache.push(hl);
+          }
+          return hl;
+        });
+      }
+      // localStorage fallback
+      hl.id = hl.id || ('hl-' + Date.now());
+      highlightsCache.push(hl);
+      saveToLocal();
+      return Promise.resolve(hl);
+    }
+
+    function deleteHL(hlId) {
+      highlightsCache = highlightsCache.filter(function (h) { return h.id !== hlId; });
+      if (useSupabase) {
+        return sb.from('highlights').delete().eq('id', hlId);
+      }
+      saveToLocal();
+      return Promise.resolve();
+    }
+
+    function clearAllHL() {
+      var ids = highlightsCache.map(function (h) { return h.id; });
+      highlightsCache = [];
+      if (useSupabase) {
+        if (ids.length === 0) return Promise.resolve();
+        return sb.from('highlights').delete().in('id', ids);
+      }
+      saveToLocal();
+      return Promise.resolve();
+    }
 
     // --- Badge ---
     var navLinks = document.querySelector('.nav-links');
@@ -124,7 +200,7 @@
     navLinks.appendChild(notesBtn);
 
     function updateBadge() {
-      var n = load().length;
+      var n = highlightsCache.length;
       notesBtn.textContent = n ? 'Notes (' + n + ')' : 'Notes';
     }
 
@@ -176,17 +252,23 @@
       if (!text) return;
 
       var section = findSection(range.startContainer);
-      var hlId = 'hl-' + Date.now();
+      var tempId = 'hl-' + Date.now();
 
-      applyHighlight(range, hlId);
-
-      var arr = load();
-      arr.push({ id: hlId, text: text, sectionId: section.id, sectionTitle: section.title, ts: Date.now() });
-      save(arr);
-
+      applyHighlight(range, tempId);
       sel.removeAllRanges();
       tooltip.style.display = 'none';
-      updateBadge();
+
+      // Save to Supabase
+      var hl = { id: tempId, text: text, sectionId: section.id, sectionTitle: section.title, ts: Date.now() };
+      insertHL(hl).then(function (saved) {
+        // Update the DOM mark elements with the real server ID
+        if (saved.id !== tempId) {
+          content.querySelectorAll('mark[data-hl-id="' + tempId + '"]').forEach(function (m) {
+            m.dataset.hlId = saved.id;
+          });
+        }
+        updateBadge();
+      });
     });
 
     // Click existing highlight → remove
@@ -195,8 +277,7 @@
       if (!mark || !mark.dataset.hlId) return;
       var hlId = mark.dataset.hlId;
       unwrapHighlight(hlId);
-      save(load().filter(function (h) { return h.id !== hlId; }));
-      updateBadge();
+      deleteHL(hlId).then(function () { updateBadge(); });
     });
 
     // --- Apply / remove highlight marks ---
@@ -258,12 +339,13 @@
       return { id: '', title: 'General' };
     }
 
-    // --- Restore on load ---
+    // --- Restore on load (from Supabase) ---
 
     function restore() {
-      var arr = load();
-      arr.forEach(function (hl) { findAndWrap(hl.text, hl.id); });
-      updateBadge();
+      loadFromDB().then(function (arr) {
+        arr.forEach(function (hl) { findAndWrap(hl.text, hl.id); });
+        updateBadge();
+      });
     }
 
     function findAndWrap(text, hlId) {
@@ -312,7 +394,7 @@
       var existing = document.querySelector('.notes-panel');
       if (existing) { existing.remove(); return; }
 
-      var highlights = load();
+      var highlights = highlightsCache.slice();
       var panel = document.createElement('div');
       panel.className = 'notes-panel';
 
@@ -364,13 +446,14 @@
             rm.textContent = 'Remove';
             rm.addEventListener('click', function () {
               unwrapHighlight(hl.id);
-              save(load().filter(function (x) { return x.id !== hl.id; }));
-              item.remove();
-              updateBadge();
-              if (!div.querySelector('.notes-item')) div.remove();
-              if (!body.querySelector('.notes-item')) {
-                body.innerHTML = '<p class="notes-empty">All highlights cleared.</p>';
-              }
+              deleteHL(hl.id).then(function () {
+                item.remove();
+                updateBadge();
+                if (!div.querySelector('.notes-item')) div.remove();
+                if (!body.querySelector('.notes-item')) {
+                  body.innerHTML = '<p class="notes-empty">All highlights cleared.</p>';
+                }
+              });
             });
             item.appendChild(rm);
             div.appendChild(item);
@@ -407,9 +490,10 @@
         clearBtn.addEventListener('click', function () {
           if (!confirm('Remove all highlights from this briefing?')) return;
           highlights.forEach(function (hl) { unwrapHighlight(hl.id); });
-          save([]);
-          updateBadge();
-          panel.remove();
+          clearAllHL().then(function () {
+            updateBadge();
+            panel.remove();
+          });
         });
         actions.appendChild(clearBtn);
         panel.appendChild(actions);
@@ -430,8 +514,26 @@
   function boot() {
     // Only run on briefing pages (not archive, search)
     if (!document.querySelector('.content h2')) return;
+
+    // Progress bar and TOC work without auth
     initProgress();
     initTOC();
-    initHighlighter();
+
+    var auth = window.briefingAuth;
+
+    // Auth disabled or not present → init highlighter immediately with localStorage
+    if (!auth || !auth.authEnabled) {
+      initHighlighter();
+      return;
+    }
+
+    // Auth enabled → wait for Supabase session to resolve
+    auth.onReady = function () {
+      initHighlighter();
+    };
+    // If auth already resolved (fast session restore)
+    if (auth.ready && auth.approved) {
+      initHighlighter();
+    }
   }
 })();

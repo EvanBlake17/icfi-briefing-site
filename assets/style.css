@@ -696,7 +696,183 @@ body {
 }
 
 /* =============================================================
-   15. Print Stylesheet
+   15. Auth Overlay
+   ============================================================= */
+
+/* Hide page content when auth is active */
+.auth-hidden {
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+}
+
+#auth-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: var(--bg);
+  justify-content: center;
+  align-items: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.auth-card {
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  padding: 40px 32px;
+}
+
+.auth-card h2 {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.auth-subtitle {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+}
+
+.auth-field {
+  margin-bottom: 16px;
+}
+
+.auth-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.auth-field input {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.auth-field input:focus {
+  border-color: var(--border);
+}
+
+.auth-submit {
+  width: 100%;
+  padding: 11px 16px;
+  margin-top: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: var(--text);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.auth-submit:hover {
+  opacity: 0.85;
+}
+
+.auth-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.auth-switch {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.auth-switch a {
+  color: var(--link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth-switch a:hover {
+  color: var(--link-hover);
+}
+
+#auth-error {
+  display: none;
+  background: #f8d7da;
+  color: #721c24;
+  padding: 10px 14px;
+  border-radius: 2px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+[data-theme="dark"] #auth-error {
+  background: #3a2020;
+  color: #e8a0a0;
+}
+
+/* Pending approval state */
+.auth-pending {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.auth-pending p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.auth-pending .auth-pending-icon {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+}
+
+/* Logout button */
+#logout-btn {
+  background: none;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  transition: background 0.15s, color 0.15s;
+  margin-left: 8px;
+}
+
+#logout-btn:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+/* =============================================================
+   16. Print Stylesheet
    ============================================================= */
 
 @media print {
@@ -705,7 +881,9 @@ body {
   .toc-panel,
   .highlight-tooltip,
   .notes-panel,
-  .site-footer {
+  .site-footer,
+  #auth-overlay,
+  #logout-btn {
     display: none !important;
   }
 
@@ -775,7 +953,7 @@ body {
 }
 
 /* =============================================================
-   16. Responsive
+   17. Responsive
    ============================================================= */
 
 @media (max-width: 600px) {

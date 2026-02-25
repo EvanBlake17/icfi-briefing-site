@@ -14,6 +14,59 @@
 <link rel="stylesheet" href="../assets/style.css">
 </head>
 <body>
+
+<!-- Auth overlay (hidden when logged in) -->
+<div id="auth-overlay">
+  <div class="auth-card">
+    <h2>Daily Briefing</h2>
+    <p class="auth-subtitle">Sign in to continue</p>
+
+    <div id="auth-error"></div>
+
+    <!-- Login form -->
+    <form id="auth-login">
+      <div class="auth-field">
+        <label for="login-email">Email</label>
+        <input type="email" name="email" id="login-email" required autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label for="login-password">Password</label>
+        <input type="password" name="password" id="login-password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="auth-submit" data-label="Sign In">Sign In</button>
+      <p class="auth-switch">No account? <a id="show-signup" href="#">Request access</a></p>
+    </form>
+
+    <!-- Signup form -->
+    <form id="auth-signup" style="display:none">
+      <div class="auth-field">
+        <label for="signup-email">Email</label>
+        <input type="email" name="email" id="signup-email" required autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label for="signup-password">Password</label>
+        <input type="password" name="password" id="signup-password" required autocomplete="new-password" minlength="6">
+      </div>
+      <div class="auth-field">
+        <label for="signup-confirm">Confirm Password</label>
+        <input type="password" name="confirm" id="signup-confirm" required autocomplete="new-password" minlength="6">
+      </div>
+      <button type="submit" class="auth-submit" data-label="Request Access">Request Access</button>
+      <p class="auth-switch">Already have an account? <a id="show-login" href="#">Sign in</a></p>
+    </form>
+
+    <!-- Pending approval -->
+    <div id="auth-pending" style="display:none">
+      <div class="auth-pending">
+        <div class="auth-pending-icon">&#9203;</div>
+        <p><strong>Account pending approval.</strong></p>
+        <p>Your request has been received. You'll be able to sign in once your account is approved.</p>
+      </div>
+      <p class="auth-switch"><a id="show-login-pending" href="#">Back to sign in</a></p>
+    </div>
+  </div>
+</div>
+
 <div class="page-wrapper">
 
   <nav class="top-nav">
@@ -873,6 +926,9 @@ capitalist legitimacy.</p>
 
 </div>
 <script src="../assets/theme.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../assets/config.js"></script>
+<script src="../assets/auth.js"></script>
 <script src="../assets/app.js"></script>
 </body>
 </html>
