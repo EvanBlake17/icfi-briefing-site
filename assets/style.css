@@ -1579,7 +1579,9 @@ body.focus-mode .content > hr {
   position: fixed;
   inset: 0;
   z-index: 15000;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
