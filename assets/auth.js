@@ -1,5 +1,5 @@
 /* =============================================================
-   Daily Briefing — Auth Gate
+   Morning Briefing — Auth Gate
    Manages Supabase authentication, login/signup UI, and
    approval-gated access to briefing content.
 

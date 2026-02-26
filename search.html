@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Search — Daily Briefing</title>
+<title>Search — Morning Briefing</title>
 <script>(function(){
   var t=localStorage.getItem('theme');
   if(t){document.documentElement.setAttribute('data-theme',t);}
@@ -11,6 +11,10 @@
     document.documentElement.setAttribute('data-theme','dark');
   }
 })();</script>
+<meta property="og:title" content="Search — Morning Briefing">
+<meta property="og:image" content="https://evanblake17.github.io/icfi-briefing-site/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -19,7 +23,7 @@
 <!-- Auth overlay -->
 <div id="auth-overlay">
   <div class="auth-card">
-    <h2>Daily Briefing</h2>
+    <h2>Morning Briefing</h2>
     <p class="auth-subtitle">Sign in to continue</p>
     <div id="auth-error"></div>
     <form id="auth-login">
@@ -61,7 +65,7 @@
 
   <header class="masthead">
     <div class="masthead-rules-top"></div>
-    <h1 class="masthead-title">Daily Briefing</h1>
+    <h1 class="masthead-title">Morning Briefing</h1>
     <p class="masthead-date">Search</p>
     <div class="masthead-rule-bottom"></div>
   </header>
@@ -81,6 +85,7 @@
 
 </div>
 <script src="assets/theme.js"></script>
+<script src="assets/lang.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="assets/config.js"></script>
 <script src="assets/auth.js"></script>

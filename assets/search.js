@@ -1,5 +1,5 @@
 /* =============================================================
-   Daily Briefing — Search
+   Morning Briefing — Search
    Loads search-index.json and performs client-side full-text search.
    ============================================================= */
 (function () {

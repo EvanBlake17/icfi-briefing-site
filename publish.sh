@@ -85,7 +85,7 @@ echo "Publishing briefing: $DATE_FORMATTED"
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
-mkdir -p "$SCRIPT_DIR/briefings" "$SCRIPT_DIR/md"
+mkdir -p "$SCRIPT_DIR/briefings" "$SCRIPT_DIR/briefings/de" "$SCRIPT_DIR/md" "$SCRIPT_DIR/md/de"
 
 # Strip leading H1 heading into a temp file for pandoc
 TMPFILE="$(strip_leading_heading "$MDFILE")"
@@ -105,6 +105,44 @@ pandoc "$TMPFILE" \
   --variable="isodate:$DATE" \
   --to=html5 \
   --output="$SCRIPT_DIR/briefings/$DATE.html"
+
+# ── Generate German briefing page (if translation exists) ─────────────────────
+
+DE_MDFILE="$BRIEFING_DIR/${DATE}_full_de.md"
+DE_ALT="$BRIEFING_DIR/${DATE}_de.md"
+
+if [[ -f "$DE_MDFILE" || -f "$DE_ALT" ]]; then
+  DE_SRC="${DE_MDFILE}"
+  [[ -f "$DE_SRC" ]] || DE_SRC="$DE_ALT"
+
+  DE_TMPFILE="$(strip_leading_heading "$DE_SRC")"
+
+  # Save clean German markdown
+  cp "$DE_TMPFILE" "$SCRIPT_DIR/md/de/$DATE.md"
+
+  echo "→ briefings/de/$DATE.html"
+  pandoc "$DE_TMPFILE" \
+    --template="$SCRIPT_DIR/templates/briefing.html" \
+    --variable="root:../../" \
+    --variable="date:$DATE_FORMATTED" \
+    --variable="isodate:$DATE" \
+    --variable="lang:de" \
+    --to=html5 \
+    --output="$SCRIPT_DIR/briefings/de/$DATE.html"
+
+  rm -f "$DE_TMPFILE"
+elif [[ -f "$SCRIPT_DIR/md/de/$DATE.md" ]]; then
+  # German markdown already in repo (e.g., regeneration)
+  echo "→ briefings/de/$DATE.html (from existing md/de/)"
+  pandoc "$SCRIPT_DIR/md/de/$DATE.md" \
+    --template="$SCRIPT_DIR/templates/briefing.html" \
+    --variable="root:../../" \
+    --variable="date:$DATE_FORMATTED" \
+    --variable="isodate:$DATE" \
+    --variable="lang:de" \
+    --to=html5 \
+    --output="$SCRIPT_DIR/briefings/de/$DATE.html"
+fi
 
 # ── Determine latest briefing ─────────────────────────────────────────────────
 
@@ -143,7 +181,7 @@ cat <<'HTMLHEAD'
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Archive — Daily Briefing</title>
+<title>Archive — Morning Briefing</title>
 <script>(function(){
   var t=localStorage.getItem('theme');
   if(t){document.documentElement.setAttribute('data-theme',t);}
@@ -151,6 +189,10 @@ cat <<'HTMLHEAD'
     document.documentElement.setAttribute('data-theme','dark');
   }
 })();</script>
+<meta property="og:title" content="Archive — Morning Briefing">
+<meta property="og:image" content="https://evanblake17.github.io/icfi-briefing-site/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -159,7 +201,7 @@ cat <<'HTMLHEAD'
 <!-- Auth overlay -->
 <div id="auth-overlay">
   <div class="auth-card">
-    <h2>Daily Briefing</h2>
+    <h2>Morning Briefing</h2>
     <p class="auth-subtitle">Sign in to continue</p>
     <div id="auth-error"></div>
     <form id="auth-login">
@@ -201,7 +243,7 @@ cat <<'HTMLHEAD'
 
   <header class="masthead">
     <div class="masthead-rules-top"></div>
-    <h1 class="masthead-title">Daily Briefing</h1>
+    <h1 class="masthead-title">Morning Briefing</h1>
     <p class="masthead-date">Archive</p>
     <div class="masthead-rule-bottom"></div>
   </header>
@@ -299,6 +341,7 @@ cat <<'HTMLFOOT'
 
 </div>
 <script src="assets/theme.js"></script>
+<script src="assets/lang.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="assets/config.js"></script>
 <script src="assets/auth.js"></script>
@@ -350,6 +393,11 @@ git add \
   "archive.html" \
   "search.html" \
   "assets/search-index.json"
+
+# Add German files if they exist
+if [[ -f "md/de/$DATE.md" ]]; then
+  git add "md/de/$DATE.md" "briefings/de/$DATE.html"
+fi
 
 MSG="${COMMIT_MSG:-"Add briefing: $DATE_FORMATTED"}"
 git commit -m "$MSG"

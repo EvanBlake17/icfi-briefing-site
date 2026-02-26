@@ -1,13 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="$if(lang)$$lang$$else$en$endif$" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>$if(title)$$title$ — $endif$Daily Briefing$if(isodate)$ · $isodate$$endif$</title>
-<meta name="description" content="Daily strategic intelligence briefing — world events, class struggle, and the political developments shaping history. $if(date)$$date$.$endif$">
-<meta property="og:title" content="Daily Briefing$if(isodate)$ · $isodate$$endif$">
-<meta property="og:description" content="A daily synthesis of world events, labor struggles, geopolitical shifts, and scientific developments — assembled each morning for those who take history seriously.">
+<title>$if(title)$$title$ — $endif$Morning Briefing$if(isodate)$ · $isodate$$endif$</title>
+<meta name="description" content="Morning strategic intelligence briefing — world events, class struggle, and the political developments shaping history. $if(date)$$date$.$endif$">
+<meta property="og:title" content="Morning Briefing$if(isodate)$ · $isodate$$endif$">
+<meta property="og:description" content="A morning synthesis of world events, labor struggles, geopolitical shifts, and scientific developments — for those who take history seriously.">
 <meta property="og:type" content="article">
+<meta property="og:image" content="https://evanblake17.github.io/icfi-briefing-site/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <script>(function(){
   var t=localStorage.getItem('theme');
   if(t){document.documentElement.setAttribute('data-theme',t);}
@@ -23,7 +26,7 @@
 <!-- Auth overlay (hidden when logged in) -->
 <div id="auth-overlay">
   <div class="auth-card">
-    <h2>Daily Briefing</h2>
+    <h2>Morning Briefing</h2>
     <p class="auth-subtitle">Sign in to continue</p>
 
     <div id="auth-error"></div>
@@ -90,7 +93,7 @@ $endif$
 
   <header class="masthead">
     <div class="masthead-rules-top"></div>
-    <h1 class="masthead-title">Daily Briefing</h1>
+    <h1 class="masthead-title">Morning Briefing</h1>
 $if(date)$
     <p class="masthead-date">$date$</p>
 $endif$
@@ -107,6 +110,7 @@ $body$
 
 </div>
 <script src="$root$assets/theme.js"></script>
+<script src="$root$assets/lang.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="$root$assets/config.js"></script>
 <script src="$root$assets/auth.js"></script>

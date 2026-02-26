@@ -1,5 +1,5 @@
 /* =============================================================
-   Daily Briefing — Configuration
+   Morning Briefing — Configuration
    ============================================================= */
 
 /* Auth toggle — set to false to disable the login gate entirely.

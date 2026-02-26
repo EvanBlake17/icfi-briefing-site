@@ -1,5 +1,5 @@
 /* =============================================================
-   Daily Briefing — Interactive Features
+   Morning Briefing — Interactive Features
    • Reading progress bar
    • Table of contents
    • Reading time estimate
@@ -1198,7 +1198,7 @@
       function buildExport(format) {
         var out = '';
         if (format === 'markdown') {
-          out = '# Notes \u2014 Daily Briefing ' + briefingDate + '\n\n';
+          out = '# Notes \u2014 Morning Briefing ' + briefingDate + '\n\n';
           sectionOrder.forEach(function (sec) {
             out += '## ' + sec + '\n\n';
             sections[sec].items.forEach(function (hl) {
@@ -1208,7 +1208,7 @@
             });
           });
         } else if (format === 'plaintext') {
-          out = 'Notes \u2014 Daily Briefing ' + briefingDate + '\n\n';
+          out = 'Notes \u2014 Morning Briefing ' + briefingDate + '\n\n';
           sectionOrder.forEach(function (sec) {
             out += sec.toUpperCase() + '\n' + '-'.repeat(sec.length) + '\n\n';
             sections[sec].items.forEach(function (hl) {
@@ -1218,7 +1218,7 @@
             });
           });
         } else if (format === 'html') {
-          out = '<h1>Notes \u2014 Daily Briefing ' + briefingDate + '</h1>\n';
+          out = '<h1>Notes \u2014 Morning Briefing ' + briefingDate + '</h1>\n';
           sectionOrder.forEach(function (sec) {
             out += '<h2>' + sec + '</h2>\n';
             sections[sec].items.forEach(function (hl) {
