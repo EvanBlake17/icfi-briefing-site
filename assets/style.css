@@ -908,7 +908,8 @@ body {
   line-height: 1;
 }
 
-.heading-wrapper:hover .bookmark-star {
+h2:hover .bookmark-star,
+h3:hover .bookmark-star {
   opacity: 0.6;
 }
 
@@ -1424,6 +1425,9 @@ body.focus-mode .content > hr {
   .site-footer,
   .bookmark-star,
   .reading-meta,
+  .back-to-top,
+  .briefing-nav,
+  .shortcuts-overlay,
   #auth-overlay,
   #logout-btn {
     display: none !important;
@@ -1528,6 +1532,236 @@ body.focus-mode .content > hr {
 }
 
 /* =============================================================
+   24. Back to Top Button
+   ============================================================= */
+
+.back-to-top {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  z-index: 900;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-light);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.25s, transform 0.25s, background 0.15s;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.back-to-top.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.back-to-top:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+/* =============================================================
+   25. Keyboard Shortcuts Overlay
+   ============================================================= */
+
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 15000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.shortcuts-card {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  padding: 28px 32px 24px;
+  min-width: 300px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.shortcuts-card h3 {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.shortcuts-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 20px;
+  align-items: baseline;
+  margin-bottom: 20px;
+}
+
+.shortcuts-list dt {
+  text-align: right;
+}
+
+.shortcuts-list kbd {
+  display: inline-block;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.shortcuts-list dd {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.shortcuts-close {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 2px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.shortcuts-close:hover {
+  opacity: 0.85;
+}
+
+/* =============================================================
+   26. Previous / Next Briefing Navigation
+   ============================================================= */
+
+.briefing-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  margin-top: 20px;
+  border-top: 1px solid var(--border-light);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+}
+
+.briefing-nav a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.briefing-nav a:hover {
+  color: var(--link);
+}
+
+.briefing-nav-prev::before {
+  content: '';
+}
+
+.briefing-nav-next {
+  margin-left: auto;
+}
+
+/* =============================================================
+   27. TOC Enhancements (read time, read tracking, hl counts)
+   ============================================================= */
+
+.toc-time {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  opacity: 0.7;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+.toc-read::before {
+  content: '\2713 ';
+  color: #6a9;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.toc-hl-count {
+  display: inline-block;
+  margin-left: 6px;
+  background: var(--hl-bg);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+
+/* =============================================================
+   28. Notes Panel — Copy Button
+   ============================================================= */
+
+.notes-copy-hl {
+  background: none;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+  margin-right: 6px;
+  transition: background 0.15s, color 0.15s;
+  opacity: 0;
+}
+
+.notes-item:hover .notes-copy-hl {
+  opacity: 1;
+}
+
+.notes-copy-hl:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+/* =============================================================
    17. Responsive
    ============================================================= */
 
@@ -1535,6 +1769,11 @@ body.focus-mode .content > hr {
   html { font-size: 16px; }
   .page-wrapper { padding: 0 18px; }
   .masthead-title { font-size: 1.8rem; }
+
+  .nav-links {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
 
   .notes-panel {
     width: 100vw;
@@ -1559,5 +1798,24 @@ body.focus-mode .content > hr {
     right: 10px;
     left: 10px;
     max-width: none;
+  }
+
+  .back-to-top {
+    bottom: 20px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  .shortcuts-card {
+    min-width: 0;
+    max-width: calc(100vw - 32px);
+    padding: 20px 24px;
+  }
+
+  .briefing-nav {
+    font-size: 12px;
+    padding: 16px 0;
   }
 }

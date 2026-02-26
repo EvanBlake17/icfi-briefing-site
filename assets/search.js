@@ -63,8 +63,11 @@
       results.push({ date: entry.date, excerpt: excerpt, count: count, pos: pos });
     });
 
-    // Sort by date descending
-    results.sort(function (a, b) { return b.date.localeCompare(a.date); });
+    // Sort by relevance (match count desc), then date descending
+    results.sort(function (a, b) {
+      if (b.count !== a.count) return b.count - a.count;
+      return b.date.localeCompare(a.date);
+    });
 
     metaEl.textContent = results.length + ' result' + (results.length === 1 ? '' : 's') +
       ' for \u201c' + query + '\u201d';

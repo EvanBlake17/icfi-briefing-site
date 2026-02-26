@@ -62,6 +62,29 @@
     update();
   }
 
+  // ── 1a. Scroll Position Memory ─────────────────────────────
+
+  function initScrollMemory() {
+    var date = getBriefingDate();
+    if (date === 'unknown') return;
+    var key = 'scroll-pos-' + date;
+
+    // Restore saved position after a brief layout delay
+    var saved = parseInt(localStorage.getItem(key), 10);
+    if (saved > 0) {
+      setTimeout(function () { window.scrollTo(0, saved); }, 150);
+    }
+
+    // Save position on scroll (debounced)
+    var timer = null;
+    window.addEventListener('scroll', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        localStorage.setItem(key, String(Math.round(window.scrollY)));
+      }, 400);
+    }, { passive: true });
+  }
+
   // ── 2. Reading Time ──────────────────────────────────────────
 
   function initReadingTime() {
@@ -168,7 +191,7 @@
       li.className = h.tagName === 'H2' ? 'toc-h2' : 'toc-h3';
       var a = document.createElement('a');
       a.href = '#' + h.id;
-      a.textContent = h.textContent;
+      a.textContent = h.textContent.replace(/[\u2606\u2605]/g, '').trim();
       a.addEventListener('click', function () {
         panel.classList.remove('open');
       });
@@ -312,6 +335,241 @@
     });
   }
 
+  // ── 9. Back to Top ──────────────────────────────────────────
+
+  function initBackToTop() {
+    var btn = document.createElement('button');
+    btn.className = 'back-to-top';
+    btn.setAttribute('aria-label', 'Back to top');
+    btn.innerHTML = '&#8593;';
+    document.body.appendChild(btn);
+
+    btn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    function update() {
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      var pct = h > 0 ? window.scrollY / h : 0;
+      btn.classList.toggle('visible', pct > 0.15);
+    }
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+
+    // Keyboard shortcut: T key
+    document.addEventListener('keydown', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.key === 't' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  }
+
+  // ── 10. Keyboard Shortcuts Help ────────────────────────────
+
+  function initKeyboardHelp() {
+    var overlay = null;
+    var shortcuts = [
+      { keys: 'F', desc: 'Toggle focus mode' },
+      { keys: 'Shift + N', desc: 'Toggle notes panel' },
+      { keys: 'T', desc: 'Scroll to top' },
+      { keys: '?', desc: 'Show this help' },
+      { keys: 'Esc', desc: 'Close panels & overlays' }
+    ];
+
+    function show() {
+      if (overlay) { hide(); return; }
+      overlay = document.createElement('div');
+      overlay.className = 'shortcuts-overlay';
+
+      var card = document.createElement('div');
+      card.className = 'shortcuts-card';
+
+      var h = document.createElement('h3');
+      h.textContent = 'Keyboard shortcuts';
+      card.appendChild(h);
+
+      var dl = document.createElement('dl');
+      dl.className = 'shortcuts-list';
+      shortcuts.forEach(function (s) {
+        var dt = document.createElement('dt');
+        var kbd = document.createElement('kbd');
+        kbd.textContent = s.keys;
+        dt.appendChild(kbd);
+        dl.appendChild(dt);
+        var dd = document.createElement('dd');
+        dd.textContent = s.desc;
+        dl.appendChild(dd);
+      });
+      card.appendChild(dl);
+
+      var closeBtn = document.createElement('button');
+      closeBtn.className = 'shortcuts-close';
+      closeBtn.textContent = 'Done';
+      closeBtn.addEventListener('click', hide);
+      card.appendChild(closeBtn);
+
+      overlay.appendChild(card);
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) hide();
+      });
+      document.body.appendChild(overlay);
+    }
+
+    function hide() {
+      if (overlay) { overlay.remove(); overlay = null; }
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+        e.preventDefault();
+        show();
+      }
+      if (e.key === 'Escape') {
+        if (overlay) { hide(); return; }
+        var notes = document.querySelector('.notes-panel');
+        if (notes) notes.remove();
+        var toc = document.querySelector('.toc-panel.open');
+        if (toc) toc.classList.remove('open');
+      }
+    });
+  }
+
+  // ── 11. Previous / Next Briefing Navigation ────────────────
+
+  function initPrevNext() {
+    var currentDate = getBriefingDate();
+    if (currentDate === 'unknown') return;
+
+    var inBriefingsDir = window.location.pathname.indexOf('/briefings/') !== -1;
+    var rootPath = inBriefingsDir ? '../' : '';
+
+    fetch(rootPath + 'assets/search-index.json')
+      .then(function (r) { return r.json(); })
+      .then(function (index) {
+        var dates = index.map(function (e) { return e.date; }).sort();
+        var idx = dates.indexOf(currentDate);
+        if (idx === -1) return;
+
+        var prev = idx > 0 ? dates[idx - 1] : null;
+        var next = idx < dates.length - 1 ? dates[idx + 1] : null;
+        if (!prev && !next) return;
+
+        var nav = document.createElement('nav');
+        nav.className = 'briefing-nav';
+
+        if (prev) {
+          var pa = document.createElement('a');
+          pa.href = rootPath + 'briefings/' + prev + '.html';
+          pa.className = 'briefing-nav-prev';
+          pa.innerHTML = '&#8592; ' + fmtNavDate(prev);
+          nav.appendChild(pa);
+        } else {
+          nav.appendChild(document.createElement('span'));
+        }
+
+        if (next) {
+          var na = document.createElement('a');
+          na.href = rootPath + 'briefings/' + next + '.html';
+          na.className = 'briefing-nav-next';
+          na.innerHTML = fmtNavDate(next) + ' &#8594;';
+          nav.appendChild(na);
+        }
+
+        var footer = document.querySelector('.site-footer');
+        if (footer) footer.parentNode.insertBefore(nav, footer);
+      })
+      .catch(function () { /* search index not available */ });
+  }
+
+  function fmtNavDate(d) {
+    var p = d.split('-');
+    var dt = new Date(+p[0], +p[1] - 1, +p[2]);
+    var m = ['January','February','March','April','May','June',
+             'July','August','September','October','November','December'];
+    return m[dt.getMonth()] + ' ' + dt.getDate();
+  }
+
+  // ── 12. TOC Enhancements (read times, read tracking) ──────
+
+  function initTOCEnhancements() {
+    var panel = document.querySelector('.toc-panel');
+    if (!panel) return;
+    var content = document.querySelector('.content');
+    if (!content) return;
+
+    var tocLinks = panel.querySelectorAll('a');
+
+    // --- Per-section reading time (h2 entries only) ---
+    tocLinks.forEach(function (link) {
+      var li = link.parentNode;
+      if (!li.classList.contains('toc-h2')) return;
+
+      var hId = link.getAttribute('href').replace('#', '');
+      var heading = document.getElementById(hId);
+      if (!heading) return;
+
+      // Count words in the section that contains this heading
+      var section = heading.closest('.briefing-section');
+      if (!section) return;
+
+      var words = (section.textContent || '').trim().split(/\s+/).length;
+      if (words > 30) {
+        var mins = Math.ceil(words / 230);
+        var badge = document.createElement('span');
+        badge.className = 'toc-time';
+        badge.textContent = mins + 'm';
+        link.appendChild(badge);
+      }
+    });
+
+    // --- Section read-through tracking ---
+    function updateRead() {
+      tocLinks.forEach(function (link) {
+        var hId = link.getAttribute('href').replace('#', '');
+        var heading = document.getElementById(hId);
+        if (!heading) return;
+        var rect = heading.getBoundingClientRect();
+        link.classList.toggle('toc-read', rect.bottom < 0);
+      });
+    }
+    window.addEventListener('scroll', updateRead, { passive: true });
+    updateRead();
+  }
+
+  // ── 13. TOC Highlight Count Badges ─────────────────────────
+
+  function updateTOCBadges() {
+    var panel = document.querySelector('.toc-panel');
+    if (!panel) return;
+
+    panel.querySelectorAll('a').forEach(function (link) {
+      var hId = link.getAttribute('href').replace('#', '');
+      var heading = document.getElementById(hId);
+      if (!heading) return;
+
+      // Count highlights from this heading to the next heading of same or higher level
+      var count = 0;
+      var level = parseInt(heading.tagName.charAt(1), 10);
+      var el = heading.nextElementSibling;
+      while (el) {
+        if (/^H[23]$/.test(el.tagName) && parseInt(el.tagName.charAt(1), 10) <= level) break;
+        if (el.querySelectorAll) count += el.querySelectorAll('.user-highlight').length;
+        el = el.nextElementSibling;
+      }
+
+      var badge = link.querySelector('.toc-hl-count');
+      if (count > 0) {
+        if (!badge) { badge = document.createElement('span'); badge.className = 'toc-hl-count'; link.appendChild(badge); }
+        badge.textContent = count;
+      } else if (badge) {
+        badge.remove();
+      }
+    });
+  }
+
   // ── 8. Highlighting + Notes ──────────────────────────────────
 
   function initHighlighter() {
@@ -431,6 +689,7 @@
     function updateBadge() {
       var n = highlightsCache.length;
       notesBtn.textContent = n ? 'Notes (' + n + ')' : 'Notes';
+      updateTOCBadges();
     }
 
     // --- Toast notification ---
@@ -822,6 +1081,20 @@
             }
             item.appendChild(annoDiv);
 
+            // Copy button
+            var copyBtn = document.createElement('button');
+            copyBtn.className = 'notes-copy-hl';
+            copyBtn.textContent = 'Copy';
+            copyBtn.addEventListener('click', function () {
+              var copyText = hl.text;
+              if (hl.annotation) copyText += '\n\nNote: ' + hl.annotation;
+              navigator.clipboard.writeText(copyText).then(function () {
+                copyBtn.textContent = 'Copied!';
+                setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1200);
+              });
+            });
+            item.appendChild(copyBtn);
+
             var rm = document.createElement('button');
             rm.className = 'notes-remove';
             rm.textContent = 'Remove';
@@ -1055,6 +1328,11 @@
     initTOC();
     initBookmarks();
     initFocusMode();
+    initScrollMemory();
+    initBackToTop();
+    initKeyboardHelp();
+    initTOCEnhancements();
+    initPrevNext();
 
     var auth = window.briefingAuth;
 
