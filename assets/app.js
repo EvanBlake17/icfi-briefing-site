@@ -577,11 +577,11 @@
 
   // Color system constants
   var COLORS = {
-    yellow: { label: 'Critical Point', key: '1' },
-    green:  { label: 'Writing Lead',   key: '2' },
-    blue:   { label: 'Question',       key: '3' },
-    red:    { label: 'Discussion',     key: '4' },
-    purple: { label: 'Strategic',      key: '5' }
+    yellow: { label: 'Critical Point', key: '1', tip: 'Key facts & major developments' },
+    green:  { label: 'Writing Lead',   key: '2', tip: 'Potential article topic' },
+    blue:   { label: 'Question',       key: '3', tip: 'Needs investigation or follow-up' },
+    red:    { label: 'Discussion',     key: '4', tip: 'Raise in editorial meeting' },
+    purple: { label: 'Strategic',      key: '5', tip: 'Broader political significance' }
   };
   var COLOR_NAMES = ['yellow', 'green', 'blue', 'red', 'purple'];
 
@@ -787,7 +787,7 @@
     COLOR_NAMES.forEach(function (c) {
       tooltipHTML += '<button class="hl-color-dot" data-color="' + c + '" '
         + 'aria-label="' + COLORS[c].label + '" '
-        + 'title="' + COLORS[c].label + ' (' + COLORS[c].key + ')">'
+        + 'data-tooltip="' + COLORS[c].label + ' (' + COLORS[c].key + ') — ' + COLORS[c].tip + '">'
         + '</button>';
     });
     tooltipHTML += '</div>';
@@ -1394,6 +1394,8 @@
         if (counts[c] === 0) return;
         var stat = document.createElement('div');
         stat.className = 'notes-stat';
+        stat.title = COLORS[c].label + ' — ' + COLORS[c].tip;
+        stat.style.cursor = 'default';
         var dot = document.createElement('span');
         dot.className = 'notes-stat-dot';
         dot.style.background = 'var(--hl-' + c + '-solid)';
@@ -1479,10 +1481,16 @@
       exportMenu.className = 'notes-export-menu';
 
       var exportOptions = [
-        { label: 'Meeting Notes (MD)', fn: function () { return buildMeetingExport('markdown', highlights); } },
-        { label: 'Meeting Notes (Text)', fn: function () { return buildMeetingExport('plaintext', highlights); } },
-        { label: 'Sequential (MD)', fn: function () { return buildSequentialExport('markdown', highlights); } },
-        { label: 'Sequential (Text)', fn: function () { return buildSequentialExport('plaintext', highlights); } }
+        { label: 'Markdown', fn: function () {
+          return currentView === 'category'
+            ? buildMeetingExport('markdown', highlights)
+            : buildSequentialExport('markdown', highlights);
+        } },
+        { label: 'Plain Text', fn: function () {
+          return currentView === 'category'
+            ? buildMeetingExport('plaintext', highlights)
+            : buildSequentialExport('plaintext', highlights);
+        } }
       ];
 
       exportOptions.forEach(function (opt) {
