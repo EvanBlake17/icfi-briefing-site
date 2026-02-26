@@ -525,14 +525,15 @@
       }
     });
 
-    // --- Section read-through tracking ---
+    // --- Section read-through tracking (cumulative — once read, stays read) ---
     function updateRead() {
       tocLinks.forEach(function (link) {
+        if (link.classList.contains('toc-read')) return; // already marked
         var hId = link.getAttribute('href').replace('#', '');
         var heading = document.getElementById(hId);
         if (!heading) return;
         var rect = heading.getBoundingClientRect();
-        link.classList.toggle('toc-read', rect.bottom < 0);
+        if (rect.bottom < 0) link.classList.add('toc-read');
       });
     }
     window.addEventListener('scroll', updateRead, { passive: true });
@@ -816,6 +817,9 @@
         }
         updateBadge();
         showToastNotification(saved);
+        // Refresh notes panel if open
+        var openPanel = document.querySelector('.notes-panel');
+        if (openPanel) { openPanel.remove(); toggleNotesPanel(); }
       });
     });
 
