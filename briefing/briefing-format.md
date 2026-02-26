@@ -97,16 +97,21 @@ Every topic section (h3) in the main briefing body MUST end with a source attrib
 
 ---
 
-## 4. Top stories editorial policy
+## 4. Editorial policy for all news sections
 
-Top stories MUST be the objectively most significant world events from the past 24 hours, determined by coverage across major international wire services and newspapers — NOT by what the WSWS happened to write about.
+The following policy applies to **every news section** — Top stories, International developments, United States, and Science, technology, and public health. The ONLY section where WSWS coverage drives story selection is "WSWS coverage — last 24 hours."
+
+**Core principle:** Stories in news sections MUST be selected based on their objective significance as real-world events, determined by coverage across major wire services, newspapers, and journals — NOT by what the WSWS happened to write about that day.
 
 **Rules:**
-- Top stories are selected based on their objective significance as world events, using bourgeois press coverage as the baseline for what happened
-- If the WSWS published on a top story, include the WSWS article in the source links and integrate their analysis — but the story's inclusion is driven by its real-world significance, not the WSWS coverage
-- A story that is ONLY covered by a single WSWS article does NOT belong in Top stories — it belongs in the "WSWS coverage" section
-- Top stories must have at least one bourgeois press source in addition to any WSWS source
-- This avoids duplication between the Top stories and WSWS coverage sections
+- Story selection is driven by what actually happened in the world, using bourgeois press coverage as the baseline for determining the day's most significant events
+- If the WSWS published on an event that independently qualifies as significant news, include the WSWS article in the source links and integrate their analysis — but the story's inclusion is driven by its real-world significance, not the WSWS coverage
+- A story that is ONLY covered by a single WSWS article does NOT belong in any news section — it belongs in "WSWS coverage — last 24 hours"
+- Every story in a news section must have at least one bourgeois press source (wire service, newspaper, journal) in addition to any WSWS source
+- This means the United States section should cover the most significant US developments from the past 24 hours (major legislation, court rulings, executive actions, labor developments covered by mainstream press, significant incidents, economic data, etc.) — not simply echo what the WSWS wrote about US topics
+- The same applies to International developments and Science/health: these sections should read as a comprehensive briefing on what happened, not a curated selection of topics the WSWS covered
+- If a WSWS article overlaps with a significant news event, cite the WSWS alongside bourgeois sources and weave in the WSWS analysis — this is the ideal outcome, where the reader gets both the facts and the Marxist analysis
+- WSWS-only stories (no bourgeois press source available) go exclusively in the WSWS coverage section, where their analysis is summarized in full
 
 ---
 
@@ -203,6 +208,8 @@ The complete structure of a briefing should be:
 
 ## International developments
 
+[Objectively most significant world events — selected by real-world importance, not WSWS coverage. Each story must have at least one bourgeois press source.]
+
 ### Headline in sentence case
 
 [Body paragraphs...]
@@ -212,6 +219,8 @@ The complete structure of a briefing should be:
 ---
 
 ## United States
+
+[Objectively most significant US developments — selected by real-world importance, not WSWS coverage. Each story must have at least one bourgeois press source.]
 
 [Same pattern...]
 
