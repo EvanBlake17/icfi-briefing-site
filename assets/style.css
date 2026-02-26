@@ -745,6 +745,7 @@ body {
   padding: 0 28px;
   margin: 0 -28px;
   transition: opacity 0.35s ease;
+  contain: content;
 }
 
 .briefing-section.alt {

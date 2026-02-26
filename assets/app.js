@@ -151,7 +151,7 @@
         return;
       }
 
-      var section = document.createElement('section');
+      var section = document.createElement('div');
       section.className = 'briefing-section';
       if (altIndex % 2 === 1) section.classList.add('alt');
       altIndex++;
