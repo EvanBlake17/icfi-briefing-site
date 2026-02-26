@@ -43,7 +43,7 @@ format_date() {
 strip_leading_heading() {
   local file="$1"
   local tmpfile
-  tmpfile="$(mktemp /tmp/briefing-XXXXXX.md)"
+  tmpfile="$(mktemp /tmp/briefing-XXXXXX)"
   # Remove first line if it starts with "# "
   awk 'NR==1 && /^# / { next } NR==2 && /^$/ { next } { print }' "$file" > "$tmpfile"
   echo "$tmpfile"

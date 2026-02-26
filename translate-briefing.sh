@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# translate-briefing.sh — Translate an English briefing to German using Claude Opus
+# translate-briefing.sh — Translate an English briefing to German using Claude Sonnet
 #
 # Usage:
 #   ./translate-briefing.sh 2026-02-26                    ← translates today's briefing
@@ -10,6 +10,9 @@
 # Token report appended to: ~/icfi-work/briefing/logs/{DATE}_tokens.md
 
 set -euo pipefail
+
+# Allow running from within a Claude Code session
+unset CLAUDECODE 2>/dev/null || true
 
 CLAUDE="$HOME/.local/bin/claude"
 WORK_DIR="$HOME/icfi-work"
