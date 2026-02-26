@@ -14,6 +14,25 @@
   --border-light: #ccc8be;
   --hl-bg:        rgba(255, 215, 90, 0.40);
   --hl-bg-hover:  rgba(255, 215, 90, 0.60);
+
+  /* Semantic highlight colors */
+  --hl-yellow:       rgba(255, 215, 90, 0.40);
+  --hl-yellow-hover: rgba(255, 215, 90, 0.60);
+  --hl-green:        rgba(100, 200, 120, 0.35);
+  --hl-green-hover:  rgba(100, 200, 120, 0.55);
+  --hl-blue:         rgba(100, 170, 240, 0.30);
+  --hl-blue-hover:   rgba(100, 170, 240, 0.50);
+  --hl-red:          rgba(240, 120, 120, 0.30);
+  --hl-red-hover:    rgba(240, 120, 120, 0.50);
+  --hl-purple:       rgba(180, 130, 220, 0.30);
+  --hl-purple-hover: rgba(180, 130, 220, 0.50);
+
+  /* Solid swatches for UI elements */
+  --hl-yellow-solid: #d4a520;
+  --hl-green-solid:  #3a9e55;
+  --hl-blue-solid:   #4a8fd4;
+  --hl-red-solid:    #d44a4a;
+  --hl-purple-solid: #8a5cb8;
 }
 
 [data-theme="dark"] {
@@ -27,6 +46,23 @@
   --border-light: #3a3630;
   --hl-bg:        rgba(200, 160, 60, 0.35);
   --hl-bg-hover:  rgba(200, 160, 60, 0.55);
+
+  --hl-yellow:       rgba(200, 160, 60, 0.35);
+  --hl-yellow-hover: rgba(200, 160, 60, 0.55);
+  --hl-green:        rgba(70, 160, 90, 0.30);
+  --hl-green-hover:  rgba(70, 160, 90, 0.50);
+  --hl-blue:         rgba(70, 130, 200, 0.30);
+  --hl-blue-hover:   rgba(70, 130, 200, 0.50);
+  --hl-red:          rgba(200, 90, 90, 0.30);
+  --hl-red-hover:    rgba(200, 90, 90, 0.50);
+  --hl-purple:       rgba(140, 100, 180, 0.30);
+  --hl-purple-hover: rgba(140, 100, 180, 0.50);
+
+  --hl-yellow-solid: #c8a040;
+  --hl-green-solid:  #4aa865;
+  --hl-blue-solid:   #5a9ad8;
+  --hl-red-solid:    #d45a5a;
+  --hl-purple-solid: #9a6cc8;
 }
 
 /* 2. Reset & Base */
@@ -443,15 +479,34 @@ body {
    ============================================================= */
 
 .user-highlight {
-  background: var(--hl-bg);
   color: var(--text);
   padding: 1px 0;
   border-radius: 2px;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s;
 }
 
-.user-highlight:hover {
-  background: var(--hl-bg-hover);
+/* Default / yellow */
+.user-highlight,
+.user-highlight[data-hl-color="yellow"] { background: var(--hl-yellow); }
+.user-highlight:hover,
+.user-highlight[data-hl-color="yellow"]:hover { background: var(--hl-yellow-hover); }
+
+.user-highlight[data-hl-color="green"]        { background: var(--hl-green); }
+.user-highlight[data-hl-color="green"]:hover   { background: var(--hl-green-hover); }
+.user-highlight[data-hl-color="blue"]         { background: var(--hl-blue); }
+.user-highlight[data-hl-color="blue"]:hover    { background: var(--hl-blue-hover); }
+.user-highlight[data-hl-color="red"]          { background: var(--hl-red); }
+.user-highlight[data-hl-color="red"]:hover     { background: var(--hl-red-hover); }
+.user-highlight[data-hl-color="purple"]       { background: var(--hl-purple); }
+.user-highlight[data-hl-color="purple"]:hover  { background: var(--hl-purple-hover); }
+
+.user-highlight-flash {
+  animation: hlFlash 1s ease-out;
+}
+
+@keyframes hlFlash {
+  0%, 30% { outline: 2px solid var(--link); outline-offset: 2px; }
+  100% { outline: 2px solid transparent; outline-offset: 2px; }
 }
 
 /* Tooltip that appears on text selection */
@@ -461,73 +516,117 @@ body {
   pointer-events: auto;
 }
 
-.highlight-tooltip .hl-btn {
-  display: block;
+.hl-color-picker {
+  display: flex;
+  gap: 6px;
   background: var(--text);
-  color: var(--bg);
-  border: none;
-  padding: 5px 14px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border-radius: 3px;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  padding: 7px 12px;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.22);
+  align-items: center;
 }
 
-.highlight-tooltip .hl-btn:hover {
-  opacity: 0.85;
+.hl-color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.1s;
+  padding: 0;
+  outline: none;
 }
+
+.hl-color-dot:hover {
+  transform: scale(1.2);
+  border-color: rgba(255,255,255,0.6);
+}
+
+.hl-color-dot[data-color="yellow"] { background: var(--hl-yellow-solid); }
+.hl-color-dot[data-color="green"]  { background: var(--hl-green-solid); }
+.hl-color-dot[data-color="blue"]   { background: var(--hl-blue-solid); }
+.hl-color-dot[data-color="red"]    { background: var(--hl-red-solid); }
+.hl-color-dot[data-color="purple"] { background: var(--hl-purple-solid); }
 
 /* =============================================================
-   13. Notes Panel
+   13. Notes Overlay (Full-Page Meeting Notes View)
    ============================================================= */
 
 .notes-toggle {
   cursor: pointer;
 }
 
-.notes-panel {
+.notes-overlay {
   position: fixed;
-  top: 0;
-  right: 0;
-  width: 380px;
-  max-width: 100vw;
-  height: 100vh;
-  background: var(--bg);
-  border-left: 1px solid var(--border-light);
-  box-shadow: -4px 0 20px rgba(0,0,0,0.10);
+  inset: 0;
   z-index: 10000;
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  animation: slideIn 0.15s ease-out;
+  animation: fadeIn 0.15s ease-out;
+  overflow: hidden;
 }
 
-@keyframes slideIn {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
-
-.notes-header {
+/* --- Header --- */
+.notes-overlay-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 16px 32px;
   border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.notes-overlay-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.notes-overlay-title {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.notes-overlay-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.notes-overlay-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex-shrink: 0;
 }
 
-.notes-header h3 {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.notes-overlay-search {
+  width: 200px;
+  padding: 6px 10px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
   color: var(--text);
-  margin: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  outline: none;
+}
+
+.notes-overlay-search:focus {
+  border-color: var(--border);
+}
+
+.notes-overlay-search::placeholder {
+  color: var(--text-muted);
 }
 
 .notes-close {
@@ -544,83 +643,375 @@ body {
   color: var(--text);
 }
 
-.notes-body {
+/* --- Stats bar --- */
+.notes-stats {
+  display: flex;
+  gap: 20px;
+  padding: 10px 32px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.notes-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.notes-stat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.notes-stat-count {
+  font-weight: 700;
+  color: var(--text);
+  margin-right: 2px;
+}
+
+/* --- Filter and view controls --- */
+.notes-controls {
+  display: flex;
+  align-items: center;
+  padding: 10px 32px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notes-filter-btn {
+  background: none;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.notes-filter-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.notes-filter-btn.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.notes-filter-btn[data-color="yellow"].active { background: var(--hl-yellow-solid); border-color: var(--hl-yellow-solid); color: #fff; }
+.notes-filter-btn[data-color="green"].active  { background: var(--hl-green-solid); border-color: var(--hl-green-solid); color: #fff; }
+.notes-filter-btn[data-color="blue"].active   { background: var(--hl-blue-solid); border-color: var(--hl-blue-solid); color: #fff; }
+.notes-filter-btn[data-color="red"].active    { background: var(--hl-red-solid); border-color: var(--hl-red-solid); color: #fff; }
+.notes-filter-btn[data-color="purple"].active { background: var(--hl-purple-solid); border-color: var(--hl-purple-solid); color: #fff; }
+
+.notes-controls-spacer {
+  flex: 1;
+}
+
+.notes-view-toggle {
+  display: flex;
+}
+
+.notes-view-btn {
+  background: none;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.notes-view-btn:first-child { border-radius: 2px 0 0 2px; }
+.notes-view-btn:last-child  { border-radius: 0 2px 2px 0; border-left: none; }
+
+.notes-view-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.notes-view-btn.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+/* --- Content area --- */
+.notes-content {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 20px;
+  padding: 24px 32px 80px;
+}
+
+.notes-content-inner {
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .notes-empty {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-style: italic;
-  padding: 24px 20px;
+  padding: 48px 0;
+  text-align: center;
 }
 
-.notes-section h4 {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin: 16px 0 8px;
-  padding-bottom: 4px;
+/* --- Section group --- */
+.notes-section-group {
+  margin-bottom: 28px;
+}
+
+.notes-section-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border-light);
-}
-
-.notes-section:first-child h4 {
-  margin-top: 4px;
-}
-
-.notes-item {
-  position: relative;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.notes-item:last-child {
-  border-bottom: none;
-}
-
-.notes-item p {
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text);
-  margin: 0 0 4px;
-}
-
-.notes-remove {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 11px;
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0;
-  opacity: 0;
-  transition: opacity 0.15s;
 }
 
-.notes-item:hover .notes-remove {
-  opacity: 1;
-}
-
-.notes-remove:hover {
+.notes-section-group-header:hover h4 {
   color: var(--link);
 }
 
+.notes-section-group h4 {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  transition: color 0.12s;
+}
+
+.notes-section-count {
+  display: inline-block;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+/* --- Category header (for By Category view) --- */
+.notes-category-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 32px 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.notes-category-header:first-child {
+  margin-top: 0;
+}
+
+.notes-category-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.notes-category-header h3 {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.notes-category-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* --- Highlight card --- */
+.notes-card {
+  display: flex;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.notes-card:last-child {
+  border-bottom: none;
+}
+
+.notes-card-color {
+  width: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.notes-card-color[data-color="yellow"] { background: var(--hl-yellow-solid); }
+.notes-card-color[data-color="green"]  { background: var(--hl-green-solid); }
+.notes-card-color[data-color="blue"]   { background: var(--hl-blue-solid); }
+.notes-card-color[data-color="red"]    { background: var(--hl-red-solid); }
+.notes-card-color[data-color="purple"] { background: var(--hl-purple-solid); }
+
+.notes-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notes-card-text {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+
+.notes-card-note {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 6px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.notes-card-note:hover {
+  color: var(--text);
+}
+
+.notes-card-add-note {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  cursor: pointer;
+  padding: 2px 0;
+  margin-bottom: 6px;
+  transition: color 0.12s;
+}
+
+.notes-card-add-note:hover {
+  color: var(--link);
+}
+
+.notes-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.notes-card-category {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notes-card-section {
+  font-style: italic;
+}
+
+.notes-card-jump {
+  cursor: pointer;
+  color: var(--link);
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: none;
+}
+
+.notes-card-jump:hover {
+  text-decoration: underline;
+}
+
+.notes-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.notes-card-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: color 0.12s;
+  opacity: 0;
+}
+
+.notes-card:hover .notes-card-btn {
+  opacity: 1;
+}
+
+.notes-card-btn:hover {
+  color: var(--link);
+}
+
+.notes-card-annotation-editor {
+  margin: 6px 0;
+}
+
+.notes-card-annotation-editor textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  outline: none;
+  resize: vertical;
+}
+
+.notes-card-annotation-editor textarea:focus {
+  border-color: var(--border);
+}
+
+/* --- Actions bar (bottom) --- */
 .notes-actions {
   display: flex;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 12px 32px;
   border-top: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 
 .notes-actions button {
-  flex: 1;
-  padding: 8px 12px;
+  padding: 8px 16px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 12px;
   font-weight: 600;
@@ -632,19 +1023,10 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 
-.notes-copy {
-  background: var(--text);
-  color: var(--bg);
-  border-color: var(--text) !important;
-}
-
-.notes-copy:hover {
-  opacity: 0.85;
-}
-
 .notes-clear {
   background: none;
   color: var(--text-muted);
+  margin-left: auto;
 }
 
 .notes-clear:hover {
@@ -1020,142 +1402,18 @@ body.focus-mode .content > hr {
 }
 
 /* =============================================================
-   21. Enhanced Notes Panel additions
+   21. Export Menu (used in notes overlay)
    ============================================================= */
 
-.notes-search {
-  padding: 8px 20px;
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
-}
-
-.notes-search input {
-  width: 100%;
-  padding: 6px 10px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: 2px;
-  outline: none;
-}
-
-.notes-search input:focus {
-  border-color: var(--border);
-}
-
-.notes-search input::placeholder {
-  color: var(--text-muted);
-}
-
-.notes-timestamp {
-  font-size: 10px;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-  margin-bottom: 2px;
-}
-
-.notes-annotation {
-  margin-top: 6px;
-}
-
-.notes-annotation textarea {
-  width: 100%;
-  min-height: 48px;
-  padding: 6px 8px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: 2px;
-  outline: none;
-  resize: vertical;
-}
-
-.notes-annotation textarea:focus {
-  border-color: var(--border);
-}
-
-.notes-annotation-text {
-  font-size: 12px;
-  font-style: italic;
-  color: var(--text-muted);
-  line-height: 1.45;
-  margin-top: 4px;
-  cursor: pointer;
-}
-
-.notes-annotation-text:hover {
-  color: var(--text);
-}
-
-.notes-add-note {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  cursor: pointer;
-  padding: 2px 0;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.notes-item:hover .notes-add-note {
-  opacity: 1;
-}
-
-.notes-add-note:hover {
-  color: var(--link);
-}
-
-.notes-section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.notes-section-header:hover h4 {
-  color: var(--link);
-}
-
-.notes-count {
-  display: inline-block;
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 8px;
-  line-height: 1.4;
-}
-
-/* Export dropdown */
 .notes-export-wrap {
   position: relative;
-  flex: 1;
-}
-
-.notes-export-btn {
-  width: 100%;
-  background: var(--text);
-  color: var(--bg);
-  border-color: var(--text) !important;
-}
-
-.notes-export-btn:hover {
-  opacity: 0.85;
 }
 
 .notes-export-menu {
   position: absolute;
   bottom: 100%;
   left: 0;
-  right: 0;
+  min-width: 200px;
   background: var(--bg);
   border: 1px solid var(--border-light);
   border-radius: 2px;
@@ -1450,7 +1708,7 @@ body.focus-mode .content > hr {
   .toc-panel,
   .highlight-tooltip,
   .hl-toast,
-  .notes-panel,
+  .notes-overlay,
   .site-footer,
   .bookmark-star,
   .reading-meta,
@@ -1516,12 +1774,17 @@ body.focus-mode .content > hr {
     content: none;
   }
 
-  .user-highlight {
+  .user-highlight,
+  .user-highlight[data-hl-color="yellow"] {
     background: #ffd !important;
     color: #000 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  .user-highlight[data-hl-color="green"]  { background: #dfd !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .user-highlight[data-hl-color="blue"]   { background: #def !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .user-highlight[data-hl-color="red"]    { background: #fdd !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .user-highlight[data-hl-color="purple"] { background: #edf !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   .content hr {
     border-color: #999;
@@ -1560,6 +1823,94 @@ body.focus-mode .content > hr {
     font-size: 0.75em;
     color: #888;
     word-break: break-all;
+  }
+
+  /* Notes overlay print mode */
+  body.notes-print-mode .page-wrapper,
+  body.notes-print-mode .reading-progress,
+  body.notes-print-mode .top-nav,
+  body.notes-print-mode .site-footer {
+    display: none !important;
+  }
+
+  body.notes-print-mode .notes-overlay {
+    display: flex !important;
+    position: static !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body.notes-print-mode .notes-overlay-header {
+    border-bottom: 2px solid #000;
+    padding: 0 0 12px;
+  }
+
+  body.notes-print-mode .notes-overlay-title {
+    color: #000;
+  }
+
+  body.notes-print-mode .notes-overlay-subtitle {
+    color: #444;
+  }
+
+  body.notes-print-mode .notes-overlay-search,
+  body.notes-print-mode .notes-close,
+  body.notes-print-mode .notes-controls,
+  body.notes-print-mode .notes-actions,
+  body.notes-print-mode .notes-card-jump,
+  body.notes-print-mode .notes-card-btn,
+  body.notes-print-mode .notes-card-add-note {
+    display: none !important;
+  }
+
+  body.notes-print-mode .notes-content {
+    max-width: 100%;
+    padding: 0;
+    overflow: visible;
+  }
+
+  body.notes-print-mode .notes-content-inner {
+    max-width: 100%;
+  }
+
+  body.notes-print-mode .notes-card {
+    page-break-inside: avoid;
+    border-bottom: 1px solid #ccc;
+  }
+
+  body.notes-print-mode .notes-card-color {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.notes-print-mode .notes-card-color[data-color="yellow"] { background: #d4a520 !important; }
+  body.notes-print-mode .notes-card-color[data-color="green"]  { background: #3a9e55 !important; }
+  body.notes-print-mode .notes-card-color[data-color="blue"]   { background: #4a8fd4 !important; }
+  body.notes-print-mode .notes-card-color[data-color="red"]    { background: #d44a4a !important; }
+  body.notes-print-mode .notes-card-color[data-color="purple"] { background: #8a5cb8 !important; }
+
+  body.notes-print-mode .notes-stat-dot {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.notes-print-mode .notes-section-group h4,
+  body.notes-print-mode .notes-category-header h3 {
+    page-break-after: avoid;
+    color: #000;
+  }
+
+  body.notes-print-mode .notes-card-text {
+    color: #000;
+  }
+
+  body.notes-print-mode .notes-card-note {
+    color: #444;
+  }
+
+  body.notes-print-mode .notes-card-meta {
+    color: #666;
   }
 }
 
@@ -1765,35 +2116,7 @@ body.focus-mode .content > hr {
   vertical-align: middle;
 }
 
-/* =============================================================
-   28. Notes Panel — Copy Button
-   ============================================================= */
-
-.notes-copy-hl {
-  background: none;
-  border: 1px solid var(--border-light);
-  color: var(--text-muted);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 2px;
-  cursor: pointer;
-  margin-right: 6px;
-  transition: background 0.15s, color 0.15s;
-  opacity: 0;
-}
-
-.notes-item:hover .notes-copy-hl {
-  opacity: 1;
-}
-
-.notes-copy-hl:hover {
-  background: var(--text);
-  color: var(--bg);
-  border-color: var(--text);
-}
+/* (Section 28 — Old Copy Button — removed, using .notes-card-btn now) */
 
 /* =============================================================
    17. Responsive
@@ -1833,8 +2156,31 @@ body.focus-mode .content > hr {
     padding: 4px 10px;
   }
 
-  .notes-panel {
-    width: 100vw;
+  .notes-overlay .notes-overlay-header,
+  .notes-overlay .notes-stats,
+  .notes-overlay .notes-controls,
+  .notes-overlay .notes-content,
+  .notes-overlay .notes-actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .notes-overlay .notes-controls {
+    flex-wrap: wrap;
+  }
+
+  .notes-overlay .notes-view-toggle {
+    margin-left: 0;
+    margin-top: 6px;
+  }
+
+  .notes-overlay .notes-overlay-search {
+    width: 140px;
+  }
+
+  .notes-overlay .notes-overlay-title-group {
+    flex-direction: column;
+    gap: 2px;
   }
 
   .toc-panel .toc-h3 a {
@@ -1877,11 +2223,15 @@ body.focus-mode .content > hr {
     padding: 16px 0;
   }
 
-  /* Larger touch target for highlight button */
-  .highlight-tooltip .hl-btn {
-    padding: 10px 20px;
-    font-size: 13px;
-    border-radius: 4px;
+  /* Larger touch targets for color picker */
+  .hl-color-dot {
+    width: 30px;
+    height: 30px;
+  }
+
+  .hl-color-picker {
+    gap: 8px;
+    padding: 8px 14px;
   }
 
   /* Tooltip positioning: ensure it doesn't go off-screen */

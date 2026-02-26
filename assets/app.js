@@ -371,8 +371,10 @@
   function initKeyboardHelp() {
     var overlay = null;
     var shortcuts = [
+      { keys: '1 \u2013 5', desc: 'Highlight selected text (1=Critical, 2=Lead, 3=Question, 4=Discussion, 5=Strategic)' },
+      { keys: 'N', desc: 'Add note to last highlight' },
+      { keys: 'Shift + N', desc: 'Toggle meeting notes view' },
       { keys: 'F', desc: 'Toggle focus mode' },
-      { keys: 'Shift + N', desc: 'Toggle notes panel' },
       { keys: 'T', desc: 'Scroll to top' },
       { keys: '?', desc: 'Show this help' },
       { keys: 'Esc', desc: 'Close panels & overlays' }
@@ -429,8 +431,8 @@
       }
       if (e.key === 'Escape') {
         if (overlay) { hide(); return; }
-        var notes = document.querySelector('.notes-panel');
-        if (notes) notes.remove();
+        var notesOv = document.querySelector('.notes-overlay');
+        if (notesOv) { notesOv.remove(); return; }
         var toc = document.querySelector('.toc-panel.open');
         if (toc) toc.classList.remove('open');
       }
@@ -573,6 +575,16 @@
 
   // ── 8. Highlighting + Notes ──────────────────────────────────
 
+  // Color system constants
+  var COLORS = {
+    yellow: { label: 'Critical Point', key: '1' },
+    green:  { label: 'Writing Lead',   key: '2' },
+    blue:   { label: 'Question',       key: '3' },
+    red:    { label: 'Discussion',     key: '4' },
+    purple: { label: 'Strategic',      key: '5' }
+  };
+  var COLOR_NAMES = ['yellow', 'green', 'blue', 'red', 'purple'];
+
   function initHighlighter() {
     var content = document.querySelector('.content');
     if (!content) return;
@@ -604,7 +616,8 @@
                 sectionId: row.section_id,
                 sectionTitle: row.section_title,
                 ts: new Date(row.created_at).getTime(),
-                annotation: row.annotation || ''
+                annotation: row.annotation || '',
+                color: row.color || 'yellow'
               };
             });
             return highlightsCache;
@@ -628,7 +641,8 @@
           briefing_date: briefingDate,
           text: hl.text,
           section_id: hl.sectionId || null,
-          section_title: hl.sectionTitle || null
+          section_title: hl.sectionTitle || null,
+          color: hl.color || 'yellow'
         }).select().single().then(function (res) {
           if (res.data) {
             hl.id = res.data.id;
@@ -672,9 +686,23 @@
       if (useSupabase) {
         return sb.from('highlights').update({ annotation: text }).eq('id', hlId)
           .then(function () {})
-          .catch(function () {
-            // annotation column might not exist yet — silently ignore
-          });
+          .catch(function () {});
+      }
+      saveToLocal();
+      return Promise.resolve();
+    }
+
+    function updateColor(hlId, newColor) {
+      var hl = highlightsCache.find(function (h) { return h.id === hlId; });
+      if (hl) hl.color = newColor;
+      // Update DOM marks
+      content.querySelectorAll('mark[data-hl-id="' + hlId + '"]').forEach(function (m) {
+        m.dataset.hlColor = newColor;
+      });
+      if (useSupabase) {
+        return sb.from('highlights').update({ color: newColor }).eq('id', hlId)
+          .then(function () {})
+          .catch(function () {});
       }
       saveToLocal();
       return Promise.resolve();
@@ -710,7 +738,7 @@
 
       var msg = document.createElement('span');
       msg.className = 'hl-toast-msg';
-      msg.textContent = 'Highlight saved';
+      msg.textContent = (COLORS[hl.color] ? COLORS[hl.color].label : 'Highlight') + ' saved';
       toast.appendChild(msg);
 
       var actions = document.createElement('div');
@@ -752,14 +780,24 @@
       clearTimeout(toastTimer);
     }
 
-    // --- Tooltip ---
+    // --- Tooltip (color picker) ---
     var tooltip = document.createElement('div');
     tooltip.className = 'highlight-tooltip';
-    tooltip.innerHTML = '<button class="hl-btn" aria-label="Highlight selection">Highlight</button>';
+    var tooltipHTML = '<div class="hl-color-picker">';
+    COLOR_NAMES.forEach(function (c) {
+      tooltipHTML += '<button class="hl-color-dot" data-color="' + c + '" '
+        + 'aria-label="' + COLORS[c].label + '" '
+        + 'title="' + COLORS[c].label + ' (' + COLORS[c].key + ')">'
+        + '</button>';
+    });
+    tooltipHTML += '</div>';
+    tooltip.innerHTML = tooltipHTML;
     tooltip.style.display = 'none';
     document.body.appendChild(tooltip);
 
-    var hlBtn = tooltip.querySelector('.hl-btn');
+    // Track last highlight for N-key note shortcut
+    var lastHighlightId = null;
+    var lastHLTimer = null;
 
     document.addEventListener('mouseup', function () {
       setTimeout(showTooltip, 10);
@@ -771,7 +809,7 @@
     // Mobile: detect text selection via selectionchange
     var touchSelTimer = null;
     document.addEventListener('selectionchange', function () {
-      if (!('ontouchstart' in window)) return; // only on touch devices
+      if (!('ontouchstart' in window)) return;
       clearTimeout(touchSelTimer);
       touchSelTimer = setTimeout(showTooltip, 300);
     });
@@ -789,30 +827,24 @@
       var ancestor = range.commonAncestorContainer;
       if (!content.contains(ancestor)) { tooltip.style.display = 'none'; return; }
 
-      // Don't show on existing highlights
       var el = ancestor.nodeType === 3 ? ancestor.parentNode : ancestor;
       if (el.closest && el.closest('.user-highlight')) { tooltip.style.display = 'none'; return; }
 
       var rect = range.getBoundingClientRect();
       tooltip.style.display = 'block';
       var tooltipTop = rect.top + window.scrollY - tooltip.offsetHeight - 8;
-      // If tooltip would go above viewport, place it below the selection instead
       if (tooltipTop < window.scrollY) {
         tooltipTop = rect.bottom + window.scrollY + 8;
       }
       tooltip.style.top = tooltipTop + 'px';
-      // Clamp left position so tooltip stays within viewport
       var tooltipLeft = rect.left + window.scrollX + rect.width / 2 - tooltip.offsetWidth / 2;
       var maxLeft = document.documentElement.clientWidth - tooltip.offsetWidth - 8;
       tooltipLeft = Math.max(8, Math.min(tooltipLeft, maxLeft));
       tooltip.style.left = tooltipLeft + 'px';
     }
 
-    hlBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
-    hlBtn.addEventListener('touchstart', function (e) { e.preventDefault(); });
-    hlBtn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
+    // Reusable highlight creation
+    function performHighlight(color) {
       var sel = window.getSelection();
       if (!sel || sel.isCollapsed) return;
 
@@ -823,14 +855,12 @@
       var section = findSection(range.startContainer);
       var tempId = 'hl-' + Date.now();
 
-      applyHighlight(range, tempId);
+      applyHighlight(range, tempId, color);
       sel.removeAllRanges();
       tooltip.style.display = 'none';
 
-      // Save
-      var hl = { id: tempId, text: text, sectionId: section.id, sectionTitle: section.title, ts: Date.now(), annotation: '' };
+      var hl = { id: tempId, text: text, sectionId: section.id, sectionTitle: section.title, ts: Date.now(), annotation: '', color: color };
       insertHL(hl).then(function (saved) {
-        // Update the DOM mark elements with the real server ID
         if (saved.id !== tempId) {
           content.querySelectorAll('mark[data-hl-id="' + tempId + '"]').forEach(function (m) {
             m.dataset.hlId = saved.id;
@@ -838,17 +868,29 @@
         }
         updateBadge();
         showToastNotification(saved);
-        // Refresh notes panel if open
-        var openPanel = document.querySelector('.notes-panel');
-        if (openPanel) { openPanel.remove(); toggleNotesPanel(); }
+        // Track for N-key note shortcut
+        lastHighlightId = saved.id;
+        clearTimeout(lastHLTimer);
+        lastHLTimer = setTimeout(function () { lastHighlightId = null; }, 10000);
+        // Refresh notes overlay if open
+        var openOverlay = document.querySelector('.notes-overlay');
+        if (openOverlay) { openOverlay.remove(); toggleNotesPanel(); }
       });
-    });
+    }
 
-    // Clicking a highlight no longer removes it — use the Notes panel instead.
+    tooltip.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    tooltip.addEventListener('touchstart', function (e) { e.preventDefault(); });
+    tooltip.addEventListener('click', function (e) {
+      var dot = e.target.closest('.hl-color-dot');
+      if (!dot) return;
+      e.preventDefault();
+      e.stopPropagation();
+      performHighlight(dot.dataset.color);
+    });
 
     // --- Apply / remove highlight marks ---
 
-    function applyHighlight(range, hlId) {
+    function applyHighlight(range, hlId, color) {
       var nodes = textNodesInRange(range);
       nodes.forEach(function (info) {
         var tn = info.node, s = info.start, en = info.end;
@@ -857,6 +899,7 @@
         var mark = document.createElement('mark');
         mark.className = 'user-highlight';
         mark.dataset.hlId = hlId;
+        mark.dataset.hlColor = color || 'yellow';
         target.parentNode.insertBefore(mark, target);
         mark.appendChild(target);
       });
@@ -909,12 +952,12 @@
 
     function restore() {
       loadFromDB().then(function (arr) {
-        arr.forEach(function (hl) { findAndWrap(hl.text, hl.id); });
+        arr.forEach(function (hl) { findAndWrap(hl.text, hl.id, hl.color); });
         updateBadge();
       });
     }
 
-    function findAndWrap(text, hlId) {
+    function findAndWrap(text, hlId, color) {
       var walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
       var nodes = [], pieces = [];
       while (walker.nextNode()) {
@@ -944,351 +987,242 @@
       var range = document.createRange();
       range.setStart(startNode, startOff);
       range.setEnd(endNode, endOff);
-      applyHighlight(range, hlId);
+      applyHighlight(range, hlId, color);
     }
 
     restore();
 
-    // --- Notes panel (enhanced) ---
+    // --- Notes overlay (full-page meeting notes view) ---
 
     notesBtn.addEventListener('click', function (e) {
       e.preventDefault();
       toggleNotesPanel();
     });
 
-    // Keyboard shortcut: Shift+N
+    // Keyboard shortcuts
     document.addEventListener('keydown', function (e) {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+      // Shift+N: toggle notes overlay
       if (e.key === 'N' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         toggleNotesPanel();
+        return;
+      }
+
+      // N: add note to last highlight
+      if (e.key === 'n' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && lastHighlightId) {
+        e.preventDefault();
+        openNotesAndFocus(lastHighlightId);
+        lastHighlightId = null;
+        return;
+      }
+
+      // 1-5: highlight selected text with color
+      if (e.key >= '1' && e.key <= '5' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        var sel = window.getSelection();
+        if (sel && !sel.isCollapsed && sel.toString().trim()) {
+          var colorIdx = parseInt(e.key, 10) - 1;
+          if (colorIdx >= 0 && colorIdx < COLOR_NAMES.length) {
+            e.preventDefault();
+            performHighlight(COLOR_NAMES[colorIdx]);
+          }
+        }
+      }
+
+      // Escape: close notes overlay
+      if (e.key === 'Escape') {
+        var overlay = document.querySelector('.notes-overlay');
+        if (overlay) { overlay.remove(); e.preventDefault(); }
       }
     });
 
-    function toggleNotesPanel() {
-      var existing = document.querySelector('.notes-panel');
-      if (existing) { existing.remove(); return; }
-
-      var highlights = highlightsCache.slice();
-      var panel = document.createElement('div');
-      panel.className = 'notes-panel';
-
-      // Header
-      var header = document.createElement('div');
-      header.className = 'notes-header';
-      var title = document.createElement('h3');
-      title.textContent = 'Notes \u2014 ' + briefingDate;
-      header.appendChild(title);
-      var closeBtn = document.createElement('button');
-      closeBtn.className = 'notes-close';
-      closeBtn.textContent = '\u00d7';
-      closeBtn.addEventListener('click', function () { panel.remove(); });
-      header.appendChild(closeBtn);
-      panel.appendChild(header);
-
-      // Search/filter bar
-      var searchWrap = document.createElement('div');
-      searchWrap.className = 'notes-search';
-      var searchInput = document.createElement('input');
-      searchInput.type = 'text';
-      searchInput.placeholder = 'Filter highlights...';
-      searchWrap.appendChild(searchInput);
-      panel.appendChild(searchWrap);
-
-      var body = document.createElement('div');
-      body.className = 'notes-body';
-
-      // Build bookmarks section at top (if any bookmarks exist)
-      var bmKeys = Object.keys(bookmarks);
-      if (bmKeys.length > 0) {
-        var bmSection = document.createElement('div');
-        bmSection.className = 'notes-bookmarks';
-        var bmH4 = document.createElement('h4');
-        bmH4.textContent = '\u2605 Bookmarks';
-        bmSection.appendChild(bmH4);
-        bmKeys.forEach(function (id) {
-          var item = document.createElement('div');
-          item.className = 'notes-bookmark-item';
-          var a = document.createElement('a');
-          a.textContent = bookmarks[id];
-          a.addEventListener('click', function () {
-            var heading = document.getElementById(id);
-            if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          });
-          item.appendChild(a);
-          bmSection.appendChild(item);
-        });
-        body.appendChild(bmSection);
-      }
-
-      if (!highlights.length) {
-        var empty = document.createElement('p');
-        empty.className = 'notes-empty';
-        empty.textContent = 'No highlights yet. Select text in the briefing and click "Highlight."';
-        body.appendChild(empty);
-      } else {
-        // Group by section
-        var sections = {};
-        var sectionOrder = [];
-        highlights.forEach(function (h) {
-          var key = h.sectionTitle || 'General';
-          if (!sections[key]) {
-            sections[key] = { id: h.sectionId, items: [] };
-            sectionOrder.push(key);
-          }
-          sections[key].items.push(h);
-        });
-
-        sectionOrder.forEach(function (sec) {
-          var div = document.createElement('div');
-          div.className = 'notes-section';
-          div.dataset.section = sec;
-
-          // Section header with count and click-to-scroll
-          var headerDiv = document.createElement('div');
-          headerDiv.className = 'notes-section-header';
-          var h4 = document.createElement('h4');
-          h4.textContent = sec;
-          headerDiv.appendChild(h4);
-          var count = document.createElement('span');
-          count.className = 'notes-count';
-          count.textContent = sections[sec].items.length;
-          headerDiv.appendChild(count);
-
-          headerDiv.addEventListener('click', function () {
-            var targetId = sections[sec].id;
-            if (targetId) {
-              var heading = document.getElementById(targetId);
-              if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          });
-          div.appendChild(headerDiv);
-
-          sections[sec].items.forEach(function (hl) {
-            var item = document.createElement('div');
-            item.className = 'notes-item';
-            item.dataset.hlId = hl.id;
-
-            // Timestamp
-            if (hl.ts) {
-              var tsDiv = document.createElement('div');
-              tsDiv.className = 'notes-timestamp';
-              tsDiv.textContent = formatRelativeTime(hl.ts);
-              item.appendChild(tsDiv);
-            }
-
-            var p = document.createElement('p');
-            p.textContent = hl.text;
-            item.appendChild(p);
-
-            // Annotation
-            var annoDiv = document.createElement('div');
-            annoDiv.className = 'notes-annotation';
-            if (hl.annotation) {
-              var annoText = document.createElement('div');
-              annoText.className = 'notes-annotation-text';
-              annoText.textContent = hl.annotation;
-              annoText.title = 'Click to edit';
-              annoText.addEventListener('click', function () {
-                annoDiv.innerHTML = '';
-                showAnnotationEditor(annoDiv, hl);
-              });
-              annoDiv.appendChild(annoText);
-            } else {
-              var addNote = document.createElement('button');
-              addNote.className = 'notes-add-note';
-              addNote.textContent = 'Add note...';
-              addNote.addEventListener('click', function () {
-                annoDiv.innerHTML = '';
-                showAnnotationEditor(annoDiv, hl);
-              });
-              annoDiv.appendChild(addNote);
-            }
-            item.appendChild(annoDiv);
-
-            // Copy button
-            var copyBtn = document.createElement('button');
-            copyBtn.className = 'notes-copy-hl';
-            copyBtn.textContent = 'Copy';
-            copyBtn.addEventListener('click', function () {
-              var copyText = hl.text;
-              if (hl.annotation) copyText += '\n\nNote: ' + hl.annotation;
-              navigator.clipboard.writeText(copyText).then(function () {
-                copyBtn.textContent = 'Copied!';
-                setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1200);
-              });
-            });
-            item.appendChild(copyBtn);
-
-            var rm = document.createElement('button');
-            rm.className = 'notes-remove';
-            rm.textContent = 'Remove';
-            rm.addEventListener('click', function () {
-              unwrapHighlight(hl.id);
-              deleteHL(hl.id).then(function () {
-                item.remove();
-                updateBadge();
-                // Update count
-                var remaining = div.querySelectorAll('.notes-item');
-                if (remaining.length === 0) {
-                  div.remove();
-                } else {
-                  count.textContent = remaining.length;
-                }
-                if (!body.querySelector('.notes-item')) {
-                  body.innerHTML = '<p class="notes-empty">All highlights cleared.</p>';
-                }
-              });
-            });
-            item.appendChild(rm);
-            div.appendChild(item);
-          });
-          body.appendChild(div);
-        });
-      }
-      panel.appendChild(body);
-
-      // Filter logic
-      searchInput.addEventListener('input', function () {
-        var q = searchInput.value.toLowerCase();
-        var items = body.querySelectorAll('.notes-item');
-        var secs = body.querySelectorAll('.notes-section');
-
-        items.forEach(function (item) {
-          var text = item.textContent.toLowerCase();
-          item.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
-        });
-
-        // Show/hide section headers based on visible items
-        secs.forEach(function (sec) {
-          var visible = sec.querySelectorAll('.notes-item:not([style*="display: none"])');
-          sec.style.display = visible.length > 0 ? '' : 'none';
-        });
-
-        // Bookmarks section
-        var bmSec = body.querySelector('.notes-bookmarks');
-        if (bmSec) {
-          if (!q) { bmSec.style.display = ''; return; }
-          var bmItems = bmSec.querySelectorAll('.notes-bookmark-item');
-          var bmVisible = false;
-          bmItems.forEach(function (item) {
-            var match = item.textContent.toLowerCase().indexOf(q) !== -1;
-            item.style.display = match ? '' : 'none';
-            if (match) bmVisible = true;
-          });
-          bmSec.style.display = bmVisible ? '' : 'none';
+    function openNotesAndFocus(hlId) {
+      var existing = document.querySelector('.notes-overlay');
+      if (!existing) toggleNotesPanel();
+      // Wait for DOM render then focus the annotation field
+      setTimeout(function () {
+        var card = document.querySelector('.notes-card[data-hl-id="' + hlId + '"]');
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          var addBtn = card.querySelector('.notes-card-add-note');
+          if (addBtn) addBtn.click();
+          var noteEl = card.querySelector('.notes-card-note');
+          if (noteEl) noteEl.click();
         }
-      });
+      }, 100);
+    }
 
-      // Actions
-      var actions = document.createElement('div');
-      actions.className = 'notes-actions';
+    // --- Document position helper (for sequential ordering) ---
+    function getDocPosition(hlId) {
+      var mark = content.querySelector('mark[data-hl-id="' + hlId + '"]');
+      if (!mark) return Infinity;
+      var rect = mark.getBoundingClientRect();
+      return rect.top + window.scrollY;
+    }
 
-      // Export dropdown
-      var exportWrap = document.createElement('div');
-      exportWrap.className = 'notes-export-wrap';
-      var exportBtn = document.createElement('button');
-      exportBtn.className = 'notes-export-btn';
-      exportBtn.textContent = 'Export \u25B4';
-      exportWrap.appendChild(exportBtn);
+    function sortByDocOrder(arr) {
+      var positions = {};
+      arr.forEach(function (hl) { positions[hl.id] = getDocPosition(hl.id); });
+      return arr.slice().sort(function (a, b) { return positions[a.id] - positions[b.id]; });
+    }
 
-      var exportMenu = document.createElement('div');
-      exportMenu.className = 'notes-export-menu';
-
-      function buildExport(format) {
-        var out = '';
-        if (format === 'markdown') {
-          out = '# Notes \u2014 Morning Briefing ' + briefingDate + '\n\n';
-          sectionOrder.forEach(function (sec) {
-            out += '## ' + sec + '\n\n';
-            sections[sec].items.forEach(function (hl) {
-              out += '> ' + hl.text + '\n';
-              if (hl.annotation) out += '\n*' + hl.annotation + '*\n';
-              out += '\n';
-            });
-          });
-        } else if (format === 'plaintext') {
-          out = 'Notes \u2014 Morning Briefing ' + briefingDate + '\n\n';
-          sectionOrder.forEach(function (sec) {
-            out += sec.toUpperCase() + '\n' + '-'.repeat(sec.length) + '\n\n';
-            sections[sec].items.forEach(function (hl) {
-              out += '\u201c' + hl.text + '\u201d\n';
-              if (hl.annotation) out += '  Note: ' + hl.annotation + '\n';
-              out += '\n';
-            });
-          });
-        } else if (format === 'html') {
-          out = '<h1>Notes \u2014 Morning Briefing ' + briefingDate + '</h1>\n';
-          sectionOrder.forEach(function (sec) {
-            out += '<h2>' + sec + '</h2>\n';
-            sections[sec].items.forEach(function (hl) {
-              out += '<blockquote>' + hl.text + '</blockquote>\n';
-              if (hl.annotation) out += '<p><em>' + hl.annotation + '</em></p>\n';
-            });
-          });
-        }
-        return out;
-      }
-
-      ['Markdown', 'Plain Text', 'HTML'].forEach(function (label) {
-        var optBtn = document.createElement('button');
-        optBtn.textContent = label;
-        optBtn.addEventListener('click', function () {
-          var format = label.toLowerCase().replace(' ', '');
-          if (format === 'plaintext') format = 'plaintext';
-          var text = buildExport(format);
-          navigator.clipboard.writeText(text).then(function () {
-            exportBtn.textContent = 'Copied!';
-            exportMenu.classList.remove('open');
-            setTimeout(function () { exportBtn.textContent = 'Export \u25B4'; }, 1500);
-          });
-        });
-        exportMenu.appendChild(optBtn);
-      });
-      exportWrap.appendChild(exportMenu);
-
-      exportBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        exportMenu.classList.toggle('open');
-      });
-
-      // Close menu on outside click
-      document.addEventListener('click', function () {
-        exportMenu.classList.remove('open');
-      });
-
-      actions.appendChild(exportWrap);
-
-      var clearBtn = document.createElement('button');
-      clearBtn.className = 'notes-clear';
-      clearBtn.textContent = 'Clear All';
-      clearBtn.addEventListener('click', function () {
-        if (!confirm('Remove all highlights from this briefing?')) return;
-        highlights.forEach(function (hl) { unwrapHighlight(hl.id); });
-        clearAllHL().then(function () {
-          updateBadge();
-          panel.remove();
-        });
-      });
-      actions.appendChild(clearBtn);
-      panel.appendChild(actions);
-
-      document.body.appendChild(panel);
-
-      // Local references for export - need sections/sectionOrder in scope
-      var sectionOrder = [];
+    // --- Group helpers ---
+    function groupBySection(highlights) {
       var sections = {};
+      var order = [];
       highlights.forEach(function (h) {
         var key = h.sectionTitle || 'General';
         if (!sections[key]) {
           sections[key] = { id: h.sectionId, items: [] };
-          sectionOrder.push(key);
+          order.push(key);
         }
         sections[key].items.push(h);
       });
+      return { sections: sections, order: order };
     }
 
-    function showAnnotationEditor(container, hl) {
+    function groupByColor(highlights) {
+      var groups = {};
+      COLOR_NAMES.forEach(function (c) { groups[c] = []; });
+      highlights.forEach(function (h) {
+        var c = h.color || 'yellow';
+        if (!groups[c]) groups[c] = [];
+        groups[c].push(h);
+      });
+      return groups;
+    }
+
+    function countByColor(highlights) {
+      var counts = {};
+      COLOR_NAMES.forEach(function (c) { counts[c] = 0; });
+      highlights.forEach(function (h) { counts[h.color || 'yellow']++; });
+      return counts;
+    }
+
+    // --- Build a highlight card ---
+    function buildCard(hl, overlay) {
+      var card = document.createElement('div');
+      card.className = 'notes-card';
+      card.dataset.hlId = hl.id;
+
+      var colorBar = document.createElement('div');
+      colorBar.className = 'notes-card-color';
+      colorBar.dataset.color = hl.color || 'yellow';
+      card.appendChild(colorBar);
+
+      var body = document.createElement('div');
+      body.className = 'notes-card-body';
+
+      // Highlighted text
+      var textEl = document.createElement('p');
+      textEl.className = 'notes-card-text';
+      textEl.textContent = hl.text;
+      body.appendChild(textEl);
+
+      // Annotation (always visible if exists)
+      var annoContainer = document.createElement('div');
+      annoContainer.className = 'notes-card-annotation-editor';
+      renderAnnotation(annoContainer, hl);
+      body.appendChild(annoContainer);
+
+      // Meta line
+      var meta = document.createElement('div');
+      meta.className = 'notes-card-meta';
+
+      var catLabel = document.createElement('span');
+      catLabel.className = 'notes-card-category';
+      catLabel.textContent = COLORS[hl.color || 'yellow'].label;
+      catLabel.style.color = 'var(--hl-' + (hl.color || 'yellow') + '-solid)';
+      meta.appendChild(catLabel);
+
+      if (hl.sectionTitle) {
+        var secLabel = document.createElement('span');
+        secLabel.className = 'notes-card-section';
+        secLabel.textContent = hl.sectionTitle;
+        meta.appendChild(secLabel);
+      }
+
+      if (hl.ts) {
+        var tsLabel = document.createElement('span');
+        tsLabel.textContent = formatRelativeTime(hl.ts);
+        meta.appendChild(tsLabel);
+      }
+
+      var jumpBtn = document.createElement('button');
+      jumpBtn.className = 'notes-card-jump';
+      jumpBtn.textContent = 'Jump to \u2192';
+      jumpBtn.addEventListener('click', function () {
+        overlay.remove();
+        var mark = content.querySelector('mark[data-hl-id="' + hl.id + '"]');
+        if (mark) {
+          mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          mark.classList.add('user-highlight-flash');
+          setTimeout(function () { mark.classList.remove('user-highlight-flash'); }, 1200);
+        }
+      });
+      meta.appendChild(jumpBtn);
+
+      // Action buttons
+      var actions = document.createElement('span');
+      actions.className = 'notes-card-actions';
+
+      var copyBtn = document.createElement('button');
+      copyBtn.className = 'notes-card-btn';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', function () {
+        var copyText = hl.text;
+        if (hl.annotation) copyText += '\n\nNote: ' + hl.annotation;
+        navigator.clipboard.writeText(copyText).then(function () {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1200);
+        });
+      });
+      actions.appendChild(copyBtn);
+
+      var rmBtn = document.createElement('button');
+      rmBtn.className = 'notes-card-btn';
+      rmBtn.textContent = 'Remove';
+      rmBtn.addEventListener('click', function () {
+        unwrapHighlight(hl.id);
+        deleteHL(hl.id).then(function () {
+          updateBadge();
+          overlay.remove();
+          toggleNotesPanel();
+        });
+      });
+      actions.appendChild(rmBtn);
+      meta.appendChild(actions);
+
+      body.appendChild(meta);
+      card.appendChild(body);
+      return card;
+    }
+
+    function renderAnnotation(container, hl) {
+      container.innerHTML = '';
+      if (hl.annotation) {
+        var noteText = document.createElement('div');
+        noteText.className = 'notes-card-note';
+        noteText.textContent = hl.annotation;
+        noteText.title = 'Click to edit';
+        noteText.addEventListener('click', function () {
+          showCardEditor(container, hl);
+        });
+        container.appendChild(noteText);
+      } else {
+        var addBtn = document.createElement('button');
+        addBtn.className = 'notes-card-add-note';
+        addBtn.textContent = 'Add note...';
+        addBtn.addEventListener('click', function () {
+          showCardEditor(container, hl);
+        });
+        container.appendChild(addBtn);
+      }
+    }
+
+    function showCardEditor(container, hl) {
+      container.innerHTML = '';
       var textarea = document.createElement('textarea');
       textarea.value = hl.annotation || '';
       textarea.placeholder = 'Add a note about this highlight...';
@@ -1307,28 +1241,413 @@
       textarea.addEventListener('blur', function () {
         hl.annotation = textarea.value;
         updateAnnotation(hl.id, textarea.value);
-        container.innerHTML = '';
-        if (hl.annotation) {
-          var annoText = document.createElement('div');
-          annoText.className = 'notes-annotation-text';
-          annoText.textContent = hl.annotation;
-          annoText.title = 'Click to edit';
-          annoText.addEventListener('click', function () {
-            container.innerHTML = '';
-            showAnnotationEditor(container, hl);
-          });
-          container.appendChild(annoText);
-        } else {
-          var addNote = document.createElement('button');
-          addNote.className = 'notes-add-note';
-          addNote.textContent = 'Add note...';
-          addNote.addEventListener('click', function () {
-            container.innerHTML = '';
-            showAnnotationEditor(container, hl);
-          });
-          container.appendChild(addNote);
+        renderAnnotation(container, hl);
+      });
+
+      textarea.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          textarea.blur();
         }
       });
+    }
+
+    // --- Export formats ---
+    function buildMeetingExport(format, highlights) {
+      var byColor = groupByColor(highlights);
+      var counts = countByColor(highlights);
+      var out = '';
+
+      if (format === 'markdown') {
+        out = '# Meeting Notes \u2014 Morning Briefing ' + briefingDate + '\n\n';
+        out += '## Summary\n';
+        COLOR_NAMES.forEach(function (c) {
+          if (counts[c] > 0) out += '- ' + COLORS[c].label + ': ' + counts[c] + '\n';
+        });
+        out += '\n---\n\n';
+        COLOR_NAMES.forEach(function (c) {
+          if (byColor[c].length === 0) return;
+          out += '## ' + COLORS[c].label + '\n\n';
+          byColor[c].forEach(function (hl) {
+            out += '> ' + hl.text + '\n';
+            if (hl.annotation) out += '\n*Note: ' + hl.annotation + '*\n';
+            if (hl.sectionTitle) out += '\n_Section: ' + hl.sectionTitle + '_\n';
+            out += '\n';
+          });
+        });
+      } else if (format === 'plaintext') {
+        out = 'MEETING NOTES \u2014 MORNING BRIEFING ' + briefingDate + '\n';
+        out += '='.repeat(50) + '\n\n';
+        out += 'SUMMARY\n';
+        COLOR_NAMES.forEach(function (c) {
+          if (counts[c] > 0) out += '  ' + COLORS[c].label + ': ' + counts[c] + '\n';
+        });
+        out += '\n' + '-'.repeat(50) + '\n\n';
+        COLOR_NAMES.forEach(function (c) {
+          if (byColor[c].length === 0) return;
+          out += COLORS[c].label.toUpperCase() + '\n';
+          out += '-'.repeat(COLORS[c].label.length) + '\n\n';
+          byColor[c].forEach(function (hl) {
+            out += '  \u201c' + hl.text + '\u201d\n';
+            if (hl.annotation) out += '  Note: ' + hl.annotation + '\n';
+            if (hl.sectionTitle) out += '  Section: ' + hl.sectionTitle + '\n';
+            out += '\n';
+          });
+        });
+      } else if (format === 'html') {
+        out = '<h1>Meeting Notes \u2014 Morning Briefing ' + briefingDate + '</h1>\n';
+        out += '<h2>Summary</h2>\n<ul>\n';
+        COLOR_NAMES.forEach(function (c) {
+          if (counts[c] > 0) out += '<li><strong>' + COLORS[c].label + ':</strong> ' + counts[c] + '</li>\n';
+        });
+        out += '</ul>\n<hr>\n';
+        COLOR_NAMES.forEach(function (c) {
+          if (byColor[c].length === 0) return;
+          out += '<h2>' + COLORS[c].label + '</h2>\n';
+          byColor[c].forEach(function (hl) {
+            out += '<blockquote>' + hl.text + '</blockquote>\n';
+            if (hl.annotation) out += '<p><em>Note: ' + hl.annotation + '</em></p>\n';
+            if (hl.sectionTitle) out += '<p style="color:#888;font-size:0.85em">Section: ' + hl.sectionTitle + '</p>\n';
+          });
+        });
+      }
+      return out;
+    }
+
+    function buildSequentialExport(format, highlights) {
+      var grouped = groupBySection(highlights);
+      var out = '';
+      if (format === 'markdown') {
+        out = '# Notes \u2014 Morning Briefing ' + briefingDate + '\n\n';
+        grouped.order.forEach(function (sec) {
+          out += '## ' + sec + '\n\n';
+          grouped.sections[sec].items.forEach(function (hl) {
+            out += '> ' + hl.text + '\n';
+            out += '> _[' + COLORS[hl.color || 'yellow'].label + ']_\n';
+            if (hl.annotation) out += '\n*Note: ' + hl.annotation + '*\n';
+            out += '\n';
+          });
+        });
+      } else if (format === 'plaintext') {
+        out = 'NOTES \u2014 MORNING BRIEFING ' + briefingDate + '\n\n';
+        grouped.order.forEach(function (sec) {
+          out += sec.toUpperCase() + '\n' + '-'.repeat(sec.length) + '\n\n';
+          grouped.sections[sec].items.forEach(function (hl) {
+            out += '  \u201c' + hl.text + '\u201d\n';
+            out += '  [' + COLORS[hl.color || 'yellow'].label + ']\n';
+            if (hl.annotation) out += '  Note: ' + hl.annotation + '\n';
+            out += '\n';
+          });
+        });
+      }
+      return out;
+    }
+
+    // --- Main notes overlay toggle ---
+    function toggleNotesPanel() {
+      var existing = document.querySelector('.notes-overlay');
+      if (existing) { existing.remove(); return; }
+
+      var highlights = sortByDocOrder(highlightsCache.slice());
+      var currentFilter = 'all';
+      var currentView = 'sequential';
+
+      var overlay = document.createElement('div');
+      overlay.className = 'notes-overlay';
+
+      // --- Header ---
+      var header = document.createElement('div');
+      header.className = 'notes-overlay-header';
+
+      var titleGroup = document.createElement('div');
+      titleGroup.className = 'notes-overlay-title-group';
+      var title = document.createElement('h2');
+      title.className = 'notes-overlay-title';
+      title.textContent = 'Meeting Notes';
+      titleGroup.appendChild(title);
+      var subtitle = document.createElement('span');
+      subtitle.className = 'notes-overlay-subtitle';
+      subtitle.textContent = 'Morning Briefing \u2014 ' + briefingDate;
+      titleGroup.appendChild(subtitle);
+      header.appendChild(titleGroup);
+
+      var headerRight = document.createElement('div');
+      headerRight.className = 'notes-overlay-header-right';
+      var searchInput = document.createElement('input');
+      searchInput.type = 'text';
+      searchInput.className = 'notes-overlay-search';
+      searchInput.placeholder = 'Search highlights...';
+      headerRight.appendChild(searchInput);
+      var closeBtn = document.createElement('button');
+      closeBtn.className = 'notes-close';
+      closeBtn.textContent = '\u00d7';
+      closeBtn.addEventListener('click', function () { overlay.remove(); });
+      headerRight.appendChild(closeBtn);
+      header.appendChild(headerRight);
+      overlay.appendChild(header);
+
+      // --- Stats bar ---
+      var counts = countByColor(highlightsCache);
+      var statsBar = document.createElement('div');
+      statsBar.className = 'notes-stats';
+      COLOR_NAMES.forEach(function (c) {
+        if (counts[c] === 0) return;
+        var stat = document.createElement('div');
+        stat.className = 'notes-stat';
+        var dot = document.createElement('span');
+        dot.className = 'notes-stat-dot';
+        dot.style.background = 'var(--hl-' + c + '-solid)';
+        stat.appendChild(dot);
+        var countSpan = document.createElement('span');
+        countSpan.className = 'notes-stat-count';
+        countSpan.textContent = counts[c];
+        stat.appendChild(countSpan);
+        var label = document.createElement('span');
+        label.textContent = COLORS[c].label;
+        stat.appendChild(label);
+        statsBar.appendChild(stat);
+      });
+      var totalStat = document.createElement('div');
+      totalStat.className = 'notes-stat';
+      totalStat.style.marginLeft = 'auto';
+      totalStat.innerHTML = '<span class="notes-stat-count">' + highlightsCache.length + '</span> total';
+      statsBar.appendChild(totalStat);
+      overlay.appendChild(statsBar);
+
+      // --- Controls bar (filters + view toggle) ---
+      var controls = document.createElement('div');
+      controls.className = 'notes-controls';
+
+      var allBtn = document.createElement('button');
+      allBtn.className = 'notes-filter-btn active';
+      allBtn.dataset.color = 'all';
+      allBtn.textContent = 'All';
+      controls.appendChild(allBtn);
+
+      COLOR_NAMES.forEach(function (c) {
+        if (counts[c] === 0) return;
+        var btn = document.createElement('button');
+        btn.className = 'notes-filter-btn';
+        btn.dataset.color = c;
+        btn.textContent = COLORS[c].label + ' (' + counts[c] + ')';
+        controls.appendChild(btn);
+      });
+
+      var spacer = document.createElement('div');
+      spacer.className = 'notes-controls-spacer';
+      controls.appendChild(spacer);
+
+      var viewToggle = document.createElement('div');
+      viewToggle.className = 'notes-view-toggle';
+      var seqBtn = document.createElement('button');
+      seqBtn.className = 'notes-view-btn active';
+      seqBtn.textContent = 'Sequential';
+      seqBtn.dataset.view = 'sequential';
+      viewToggle.appendChild(seqBtn);
+      var catBtn = document.createElement('button');
+      catBtn.className = 'notes-view-btn';
+      catBtn.textContent = 'By Category';
+      catBtn.dataset.view = 'category';
+      viewToggle.appendChild(catBtn);
+      controls.appendChild(viewToggle);
+      overlay.appendChild(controls);
+
+      // --- Content area ---
+      var contentArea = document.createElement('div');
+      contentArea.className = 'notes-content';
+      var contentInner = document.createElement('div');
+      contentInner.className = 'notes-content-inner';
+      contentArea.appendChild(contentInner);
+      overlay.appendChild(contentArea);
+
+      // --- Actions bar ---
+      var actions = document.createElement('div');
+      actions.className = 'notes-actions';
+
+      // Export dropdown
+      var exportWrap = document.createElement('div');
+      exportWrap.className = 'notes-export-wrap';
+      exportWrap.style.position = 'relative';
+      var exportBtn = document.createElement('button');
+      exportBtn.textContent = 'Export \u25B4';
+      exportBtn.style.background = 'var(--text)';
+      exportBtn.style.color = 'var(--bg)';
+      exportBtn.style.borderColor = 'var(--text)';
+      exportWrap.appendChild(exportBtn);
+
+      var exportMenu = document.createElement('div');
+      exportMenu.className = 'notes-export-menu';
+
+      var exportOptions = [
+        { label: 'Meeting Notes (MD)', fn: function () { return buildMeetingExport('markdown', highlights); } },
+        { label: 'Meeting Notes (Text)', fn: function () { return buildMeetingExport('plaintext', highlights); } },
+        { label: 'Sequential (MD)', fn: function () { return buildSequentialExport('markdown', highlights); } },
+        { label: 'Sequential (Text)', fn: function () { return buildSequentialExport('plaintext', highlights); } }
+      ];
+
+      exportOptions.forEach(function (opt) {
+        var optBtn = document.createElement('button');
+        optBtn.textContent = opt.label;
+        optBtn.addEventListener('click', function () {
+          var text = opt.fn();
+          navigator.clipboard.writeText(text).then(function () {
+            exportBtn.textContent = 'Copied!';
+            exportMenu.classList.remove('open');
+            setTimeout(function () { exportBtn.textContent = 'Export \u25B4'; }, 1500);
+          });
+        });
+        exportMenu.appendChild(optBtn);
+      });
+      exportWrap.appendChild(exportMenu);
+      exportBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        exportMenu.classList.toggle('open');
+      });
+      actions.appendChild(exportWrap);
+
+      // Print button
+      var printBtn = document.createElement('button');
+      printBtn.textContent = 'Print';
+      printBtn.addEventListener('click', function () {
+        document.body.classList.add('notes-print-mode');
+        window.print();
+        document.body.classList.remove('notes-print-mode');
+      });
+      actions.appendChild(printBtn);
+
+      var clearBtn = document.createElement('button');
+      clearBtn.className = 'notes-clear';
+      clearBtn.textContent = 'Clear All';
+      clearBtn.addEventListener('click', function () {
+        if (!confirm('Remove all highlights from this briefing?')) return;
+        highlightsCache.slice().forEach(function (hl) { unwrapHighlight(hl.id); });
+        clearAllHL().then(function () {
+          updateBadge();
+          overlay.remove();
+        });
+      });
+      actions.appendChild(clearBtn);
+      overlay.appendChild(actions);
+
+      // Close export menu on outside click
+      overlay.addEventListener('click', function (e) {
+        if (!exportWrap.contains(e.target)) exportMenu.classList.remove('open');
+      });
+
+      // --- Render content ---
+      function renderContent() {
+        contentInner.innerHTML = '';
+        var filtered = highlights;
+        if (currentFilter !== 'all') {
+          filtered = highlights.filter(function (h) { return (h.color || 'yellow') === currentFilter; });
+        }
+        // Apply search filter
+        var q = searchInput.value.toLowerCase().trim();
+        if (q) {
+          filtered = filtered.filter(function (h) {
+            return h.text.toLowerCase().indexOf(q) !== -1
+              || (h.annotation && h.annotation.toLowerCase().indexOf(q) !== -1)
+              || (h.sectionTitle && h.sectionTitle.toLowerCase().indexOf(q) !== -1);
+          });
+        }
+
+        if (filtered.length === 0) {
+          var empty = document.createElement('p');
+          empty.className = 'notes-empty';
+          empty.textContent = highlights.length === 0
+            ? 'No highlights yet. Select text in the briefing and click a color to highlight.'
+            : 'No highlights match the current filter.';
+          contentInner.appendChild(empty);
+          return;
+        }
+
+        if (currentView === 'sequential') {
+          // Grouped by section, in document order
+          var grouped = groupBySection(filtered);
+          grouped.order.forEach(function (sec) {
+            var group = document.createElement('div');
+            group.className = 'notes-section-group';
+
+            var headerDiv = document.createElement('div');
+            headerDiv.className = 'notes-section-group-header';
+            var h4 = document.createElement('h4');
+            h4.textContent = sec;
+            headerDiv.appendChild(h4);
+            var cnt = document.createElement('span');
+            cnt.className = 'notes-section-count';
+            cnt.textContent = grouped.sections[sec].items.length;
+            headerDiv.appendChild(cnt);
+            headerDiv.addEventListener('click', function () {
+              var targetId = grouped.sections[sec].id;
+              if (targetId) {
+                overlay.remove();
+                var heading = document.getElementById(targetId);
+                if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            });
+            group.appendChild(headerDiv);
+
+            grouped.sections[sec].items.forEach(function (hl) {
+              group.appendChild(buildCard(hl, overlay));
+            });
+            contentInner.appendChild(group);
+          });
+        } else {
+          // Grouped by color category
+          var byColor = groupByColor(filtered);
+          COLOR_NAMES.forEach(function (c) {
+            if (byColor[c].length === 0) return;
+            var catHeader = document.createElement('div');
+            catHeader.className = 'notes-category-header';
+            var dot = document.createElement('span');
+            dot.className = 'notes-category-dot';
+            dot.style.background = 'var(--hl-' + c + '-solid)';
+            catHeader.appendChild(dot);
+            var h3 = document.createElement('h3');
+            h3.textContent = COLORS[c].label;
+            catHeader.appendChild(h3);
+            var cnt = document.createElement('span');
+            cnt.className = 'notes-category-count';
+            cnt.textContent = byColor[c].length + ' highlight' + (byColor[c].length === 1 ? '' : 's');
+            catHeader.appendChild(cnt);
+            contentInner.appendChild(catHeader);
+
+            byColor[c].forEach(function (hl) {
+              contentInner.appendChild(buildCard(hl, overlay));
+            });
+          });
+        }
+      }
+
+      renderContent();
+
+      // --- Filter click handlers ---
+      controls.addEventListener('click', function (e) {
+        var btn = e.target.closest('.notes-filter-btn');
+        if (btn) {
+          controls.querySelectorAll('.notes-filter-btn').forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          currentFilter = btn.dataset.color;
+          renderContent();
+        }
+        var viewBtn = e.target.closest('.notes-view-btn');
+        if (viewBtn) {
+          viewToggle.querySelectorAll('.notes-view-btn').forEach(function (b) { b.classList.remove('active'); });
+          viewBtn.classList.add('active');
+          currentView = viewBtn.dataset.view;
+          renderContent();
+        }
+      });
+
+      // Search input
+      var searchTimer = null;
+      searchInput.addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(renderContent, 200);
+      });
+
+      document.body.appendChild(overlay);
+      searchInput.focus();
     }
   }
 
