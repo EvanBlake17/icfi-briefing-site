@@ -768,6 +768,17 @@
       if (!tooltip.contains(e.target)) tooltip.style.display = 'none';
     });
 
+    // Mobile: detect text selection via selectionchange
+    var touchSelTimer = null;
+    document.addEventListener('selectionchange', function () {
+      if (!('ontouchstart' in window)) return; // only on touch devices
+      clearTimeout(touchSelTimer);
+      touchSelTimer = setTimeout(showTooltip, 300);
+    });
+    document.addEventListener('touchstart', function (e) {
+      if (!tooltip.contains(e.target)) tooltip.style.display = 'none';
+    });
+
     function showTooltip() {
       var sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) {
@@ -784,11 +795,21 @@
 
       var rect = range.getBoundingClientRect();
       tooltip.style.display = 'block';
-      tooltip.style.top = (rect.top + window.scrollY - tooltip.offsetHeight - 8) + 'px';
-      tooltip.style.left = (rect.left + window.scrollX + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+      var tooltipTop = rect.top + window.scrollY - tooltip.offsetHeight - 8;
+      // If tooltip would go above viewport, place it below the selection instead
+      if (tooltipTop < window.scrollY) {
+        tooltipTop = rect.bottom + window.scrollY + 8;
+      }
+      tooltip.style.top = tooltipTop + 'px';
+      // Clamp left position so tooltip stays within viewport
+      var tooltipLeft = rect.left + window.scrollX + rect.width / 2 - tooltip.offsetWidth / 2;
+      var maxLeft = document.documentElement.clientWidth - tooltip.offsetWidth - 8;
+      tooltipLeft = Math.max(8, Math.min(tooltipLeft, maxLeft));
+      tooltip.style.left = tooltipLeft + 'px';
     }
 
     hlBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    hlBtn.addEventListener('touchstart', function (e) { e.preventDefault(); });
     hlBtn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();

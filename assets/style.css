@@ -1769,12 +1769,32 @@ body.focus-mode .content > hr {
 
 @media (max-width: 600px) {
   html { font-size: 16px; }
-  .page-wrapper { padding: 0 18px; }
+  .page-wrapper { padding: 0 16px; }
   .masthead-title { font-size: 1.8rem; }
 
+  .top-nav {
+    padding: 12px 0 8px;
+    position: relative;
+  }
+
   .nav-links {
+    display: flex;
     flex-wrap: wrap;
-    gap: 4px 12px;
+    gap: 0 14px;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+  }
+
+  .nav-links a {
+    padding: 6px 0;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+  }
+
+  #theme-toggle {
+    font-size: 10px;
+    padding: 4px 10px;
   }
 
   .notes-panel {
@@ -1819,5 +1839,17 @@ body.focus-mode .content > hr {
   .briefing-nav {
     font-size: 12px;
     padding: 16px 0;
+  }
+
+  /* Larger touch target for highlight button */
+  .highlight-tooltip .hl-btn {
+    padding: 10px 20px;
+    font-size: 13px;
+    border-radius: 4px;
+  }
+
+  /* Tooltip positioning: ensure it doesn't go off-screen */
+  .highlight-tooltip {
+    max-width: calc(100vw - 32px);
   }
 }
