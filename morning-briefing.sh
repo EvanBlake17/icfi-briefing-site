@@ -29,6 +29,9 @@ TOKEN_REPORT="$LOGDIR/${DATE}_tokens.md"
 # Ensure PATH includes homebrew (for pandoc, gh) and local bin (for claude)
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
+# Allow running from within a Claude Code session (e.g., manual re-runs)
+unset CLAUDECODE 2>/dev/null || true
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 mkdir -p "$LOGDIR" "$WORK_DIR/briefing/daily"
