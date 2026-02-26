@@ -55,21 +55,30 @@ run_claude_tracked() {
   local step_name="$1"
   local prompt="$2"
   shift 2
-  local extra_args=("$@")
 
   local start_time=$(date +%s)
   local json_out
-  local result_file=$(mktemp /tmp/claude-result-XXXXXX.json)
+  local result_file=$(mktemp /tmp/claude-result-XXXXXX)
 
   # Run claude with JSON output to capture token usage
-  "$CLAUDE" -p "$prompt" \
-    --output-format json \
-    --dangerously-skip-permissions \
-    "${extra_args[@]}" \
-    > "$result_file" 2>> "$LOGFILE" || {
-    rm -f "$result_file"
-    return 1
-  }
+  if [[ $# -gt 0 ]]; then
+    "$CLAUDE" -p "$prompt" \
+      --output-format json \
+      --dangerously-skip-permissions \
+      "$@" \
+      > "$result_file" 2>> "$LOGFILE" || {
+      rm -f "$result_file"
+      return 1
+    }
+  else
+    "$CLAUDE" -p "$prompt" \
+      --output-format json \
+      --dangerously-skip-permissions \
+      > "$result_file" 2>> "$LOGFILE" || {
+      rm -f "$result_file"
+      return 1
+    }
+  fi
 
   local end_time=$(date +%s)
   STEP_DURATION=$((end_time - start_time))

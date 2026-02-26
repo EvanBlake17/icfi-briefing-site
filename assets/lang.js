@@ -43,7 +43,11 @@
     'October': 'Oktober', 'November': 'November', 'December': 'Dezember',
     'Monday': 'Montag', 'Tuesday': 'Dienstag', 'Wednesday': 'Mittwoch',
     'Thursday': 'Donnerstag', 'Friday': 'Freitag',
-    'Saturday': 'Samstag', 'Sunday': 'Sonntag'
+    'Saturday': 'Samstag', 'Sunday': 'Sonntag',
+    'World Events': 'Weltgeschehen',
+    'Class Struggle': 'Klassenkampf',
+    'Strategic Insights': 'Strategische Einblicke',
+    'Daily': 'T\u00e4glich'
   };
 
   var TRANSLATIONS = { de: DE };
@@ -160,6 +164,12 @@
       var dt = mDate.textContent.trim();
       if (dt === 'Archive') mDate.textContent = t('Archive');
       if (dt === 'Search') mDate.textContent = t('Search');
+    }
+
+    // Masthead tagline
+    var tagline = document.querySelector('.masthead-tagline');
+    if (tagline) {
+      tagline.innerHTML = t('World Events') + ' &middot; ' + t('Class Struggle') + ' &middot; ' + t('Strategic Insights') + ' &middot; ' + t('Daily');
     }
 
     // Auth card

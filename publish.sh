@@ -242,10 +242,13 @@ cat <<'HTMLHEAD'
   </nav>
 
   <header class="masthead">
-    <div class="masthead-rules-top"></div>
-    <h1 class="masthead-title">Morning Briefing</h1>
-    <p class="masthead-date">Archive</p>
-    <div class="masthead-rule-bottom"></div>
+    <div class="masthead-accent"></div>
+    <div class="masthead-inner">
+      <h1 class="masthead-title">Morning Briefing</h1>
+      <p class="masthead-date">Archive</p>
+      <div class="masthead-divider"></div>
+      <p class="masthead-tagline">World Events &middot; Class Struggle &middot; Strategic Insights &middot; Daily</p>
+    </div>
   </header>
 
   <main class="content">
