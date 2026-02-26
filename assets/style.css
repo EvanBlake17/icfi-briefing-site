@@ -724,6 +724,92 @@ body {
 }
 
 /* =============================================================
+   15a. Top Summary Section ("What we're covering today")
+   ============================================================= */
+
+.briefing-section:first-child {
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  padding-top: 8px;
+  padding-bottom: 20px;
+  margin-bottom: 8px;
+}
+
+.briefing-section:first-child h2 {
+  border-top: none;
+  margin-top: 12px;
+}
+
+.briefing-section:first-child ul {
+  list-style: none;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.briefing-section:first-child li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.briefing-section:first-child li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.briefing-section:first-child li strong {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-weight: 700;
+}
+
+/* =============================================================
+   15b. Source Links
+   ============================================================= */
+
+.source-links {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-top: -0.4em;
+  margin-bottom: 2em;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 2px;
+  border-left: 2px solid var(--border-light);
+}
+
+.source-links .source-label {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.source-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.source-links a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.source-links .pub {
+  font-weight: 600;
+}
+
+.source-links .sep {
+  margin: 0 2px;
+  opacity: 0.4;
+}
+
+/* =============================================================
    16. Highlight Toast
    ============================================================= */
 
@@ -804,61 +890,7 @@ body {
   padding-bottom: 4px;
 }
 
-/* =============================================================
-   18. Quick-Share Section Links
-   ============================================================= */
-
-.heading-wrapper {
-  position: relative;
-}
-
-.share-link {
-  position: absolute;
-  left: -24px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 14px;
-  color: var(--text-muted);
-  text-decoration: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-  cursor: pointer;
-  padding: 2px 4px;
-  line-height: 1;
-}
-
-.heading-wrapper:hover .share-link {
-  opacity: 0.5;
-}
-
-.share-link:hover {
-  opacity: 1 !important;
-  color: var(--link);
-}
-
-.share-copied {
-  position: absolute;
-  left: -24px;
-  top: 50%;
-  transform: translateY(-50%) translateY(-24px);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--link);
-  font-weight: 600;
-  opacity: 0;
-  pointer-events: none;
-  animation: copiedFade 1.2s ease-out forwards;
-}
-
-@keyframes copiedFade {
-  0%   { opacity: 0; transform: translateY(-50%) translateY(-24px); }
-  15%  { opacity: 1; transform: translateY(-50%) translateY(-28px); }
-  80%  { opacity: 1; transform: translateY(-50%) translateY(-28px); }
-  100% { opacity: 0; transform: translateY(-50%) translateY(-32px); }
-}
+/* (Section 18 — Quick-Share Links — removed) */
 
 /* =============================================================
    19. Section Bookmarking
@@ -1390,7 +1422,6 @@ body.focus-mode .content > hr {
   .hl-toast,
   .notes-panel,
   .site-footer,
-  .share-link,
   .bookmark-star,
   .reading-meta,
   #auth-overlay,
@@ -1473,6 +1504,27 @@ body.focus-mode .content > hr {
     orphans: 3;
     widows: 3;
   }
+
+  .briefing-section:first-child {
+    background: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    page-break-inside: avoid;
+  }
+
+  .source-links {
+    background: #f5f5f5 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 9pt;
+  }
+
+  .source-links a::after {
+    content: " (" attr(href) ")";
+    font-size: 0.75em;
+    color: #888;
+    word-break: break-all;
+  }
 }
 
 /* =============================================================
@@ -1497,9 +1549,9 @@ body.focus-mode .content > hr {
     margin: 0 -18px;
   }
 
-  .share-link {
-    left: -20px;
-    font-size: 12px;
+  .source-links {
+    font-size: 0.72rem;
+    padding: 6px 10px;
   }
 
   .hl-toast {
