@@ -76,7 +76,7 @@ log "English source: $EN_WORDS words"
 
 # ── Translate using Claude Opus ───────────────────────────────────────────────
 
-log "Translating to German using Claude Opus..."
+log "Translating to German using Claude Sonnet..."
 
 TRANSLATE_START=$(date +%s)
 
@@ -99,7 +99,7 @@ CRITICAL RULES:
 Here is the English briefing to translate:
 
 $EN_CONTENT" \
-  --model opus \
+  --model sonnet \
   --output-format json \
   --max-turns 1 \
   --dangerously-skip-permissions \
@@ -160,7 +160,7 @@ log "Tokens — input: $INPUT_TOKENS, output: $OUTPUT_TOKENS, total: $TOTAL_TOKE
   echo ""
   echo "| Metric | Value |"
   echo "|--------|-------|"
-  echo "| Model | Claude Opus |"
+  echo "| Model | Claude Sonnet |"
   echo "| Source words | $EN_WORDS |"
   echo "| Translated words | $DE_WORDS |"
   echo "| Input tokens | $INPUT_TOKENS |"
