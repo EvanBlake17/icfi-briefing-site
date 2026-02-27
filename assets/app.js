@@ -391,17 +391,22 @@
     }
 
     document.addEventListener('keydown', function (e) {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-      if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
-        e.preventDefault();
-        show();
-      }
+      var inField = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+
+      // Escape always works, even inside inputs
       if (e.key === 'Escape') {
         if (overlay) { hide(); return; }
         var notesOv = document.querySelector('.notes-overlay');
         if (notesOv) { notesOv.remove(); return; }
         var toc = document.querySelector('.toc-panel.open');
         if (toc) toc.classList.remove('open');
+        return;
+      }
+
+      if (inField) return;
+      if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+        e.preventDefault();
+        show();
       }
     });
   }
