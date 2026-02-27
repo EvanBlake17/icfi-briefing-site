@@ -152,6 +152,16 @@
       span.textContent = t(span.textContent.trim());
     });
 
+    // Reading tools panel tooltips
+    document.querySelectorAll('#reading-tools .rt-btn[data-label]').forEach(function (btn) {
+      var label = btn.getAttribute('data-label');
+      var translated = t(label);
+      if (translated !== label) {
+        btn.setAttribute('data-label', translated);
+        btn.setAttribute('aria-label', translated);
+      }
+    });
+
     // Masthead title
     var mTitle = document.querySelector('.masthead-title');
     if (mTitle && mTitle.textContent.trim() === 'Morning Briefing') {

@@ -173,17 +173,12 @@
     var headings = content.querySelectorAll('h2[id], h3[id]');
     if (headings.length < 3) return;
 
-    // Button
-    var navLinks = document.querySelector('.nav-links');
-    var btn = document.createElement('a');
-    btn.href = '#';
-    btn.className = 'toc-toggle';
-    btn.textContent = 'Contents';
-    navLinks.appendChild(btn);
+    // Panel (flyout mode, appended to body)
+    var rt = window.__readingTools;
+    var btn = rt ? rt.tocBtn : null;
 
-    // Panel
     var panel = document.createElement('nav');
-    panel.className = 'toc-panel';
+    panel.className = 'toc-panel side-panel-mode';
     var ul = document.createElement('ul');
 
     headings.forEach(function (h) {
@@ -200,17 +195,18 @@
     });
     panel.appendChild(ul);
 
-    var topNav = document.querySelector('.top-nav');
-    topNav.parentNode.insertBefore(panel, topNav.nextSibling);
+    document.body.appendChild(panel);
 
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      panel.classList.toggle('open');
-    });
+    if (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        panel.classList.toggle('open');
+      });
+    }
 
     document.addEventListener('click', function (e) {
-      if (!panel.contains(e.target) && e.target !== btn) {
+      if (!panel.contains(e.target) && (!btn || e.target !== btn)) {
         panel.classList.remove('open');
       }
     });
@@ -283,22 +279,20 @@
   function initFocusMode() {
     if (briefingSections.length < 2) return;
 
-    var navLinks = document.querySelector('.nav-links');
-    var btn = document.createElement('a');
-    btn.href = '#';
-    btn.className = 'focus-toggle';
-    btn.textContent = 'Focus';
-    navLinks.appendChild(btn);
+    var rt = window.__readingTools;
+    var btn = rt ? rt.focusBtn : null;
 
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      toggleFocus();
-    });
+    if (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        toggleFocus();
+      });
+    }
 
     function toggleFocus() {
       focusActive = !focusActive;
       document.body.classList.toggle('focus-mode', focusActive);
-      btn.classList.toggle('active', focusActive);
+      if (btn) btn.classList.toggle('active', focusActive);
       if (focusActive) updateFocusedSection();
     }
 
@@ -337,34 +331,7 @@
 
   // ── 9. Back to Top ──────────────────────────────────────────
 
-  function initBackToTop() {
-    var btn = document.createElement('button');
-    btn.className = 'back-to-top';
-    btn.setAttribute('aria-label', 'Back to top');
-    btn.innerHTML = '&#8593;';
-    document.body.appendChild(btn);
-
-    btn.addEventListener('click', function () {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-
-    function update() {
-      var h = document.documentElement.scrollHeight - window.innerHeight;
-      var pct = h > 0 ? window.scrollY / h : 0;
-      btn.classList.toggle('visible', pct > 0.15);
-    }
-    window.addEventListener('scroll', update, { passive: true });
-    update();
-
-    // Keyboard shortcut: T key
-    document.addEventListener('keydown', function (e) {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-      if (e.key === 't' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-        e.preventDefault();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    });
-  }
+  // initBackToTop — replaced by reading tools panel (see initReadingToolsPanel)
 
   // ── 10. Keyboard Shortcuts Help ────────────────────────────
 
@@ -709,15 +676,15 @@
     }
 
     // --- Badge ---
-    var navLinks = document.querySelector('.nav-links');
-    var notesBtn = document.createElement('a');
-    notesBtn.href = '#';
-    notesBtn.className = 'notes-toggle';
-    navLinks.appendChild(notesBtn);
+    var rt = window.__readingTools;
+    var notesBtn = rt ? rt.notesBtn : null;
+    var notesBadge = rt ? rt.notesBadge : null;
 
     function updateBadge() {
       var n = highlightsCache.length;
-      notesBtn.textContent = n ? 'Notes (' + n + ')' : 'Notes';
+      if (notesBadge) {
+        notesBadge.textContent = n > 0 ? n : '';
+      }
       updateTOCBadges();
     }
 
@@ -994,10 +961,12 @@
 
     // --- Notes overlay (full-page meeting notes view) ---
 
-    notesBtn.addEventListener('click', function (e) {
-      e.preventDefault();
-      toggleNotesPanel();
-    });
+    if (notesBtn) {
+      notesBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        toggleNotesPanel();
+      });
+    }
 
     // Keyboard shortcuts
     document.addEventListener('keydown', function (e) {
@@ -1659,6 +1628,108 @@
     }
   }
 
+  // ── 12. Reading Tools Side Panel ──────────────────────────────
+
+  function initReadingToolsPanel() {
+    var panel = document.createElement('div');
+    panel.id = 'reading-tools';
+    panel.className = 'reading-tools';
+
+    // Back-to-top button (replaces standalone version)
+    var bttBtn = document.createElement('button');
+    bttBtn.className = 'rt-btn back-to-top rt-hidden';
+    bttBtn.setAttribute('aria-label', 'Back to top');
+    bttBtn.innerHTML = '&#8593;';
+    bttBtn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    panel.appendChild(bttBtn);
+
+    // Contents
+    var tocBtn = document.createElement('button');
+    tocBtn.className = 'rt-btn rt-toc';
+    tocBtn.setAttribute('aria-label', 'Contents');
+    tocBtn.setAttribute('data-label', 'Contents');
+    tocBtn.innerHTML = '&#9776;';
+    panel.appendChild(tocBtn);
+
+    // Focus
+    var focusBtn = document.createElement('button');
+    focusBtn.className = 'rt-btn rt-focus';
+    focusBtn.setAttribute('aria-label', 'Focus');
+    focusBtn.setAttribute('data-label', 'Focus');
+    focusBtn.innerHTML = '&#9678;';
+    panel.appendChild(focusBtn);
+
+    // Notes
+    var notesBtn = document.createElement('button');
+    notesBtn.className = 'rt-btn rt-notes';
+    notesBtn.setAttribute('aria-label', 'Notes');
+    notesBtn.setAttribute('data-label', 'Notes');
+    notesBtn.innerHTML = '&#9998;';
+    var badge = document.createElement('span');
+    badge.className = 'rt-badge';
+    notesBtn.appendChild(badge);
+    panel.appendChild(notesBtn);
+
+    // Theme toggle
+    var themeBtn = document.createElement('button');
+    themeBtn.className = 'rt-btn rt-theme';
+    themeBtn.setAttribute('aria-label', 'Toggle theme');
+    themeBtn.setAttribute('data-label', 'Theme');
+    function updateThemeIcon() {
+      var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      themeBtn.innerHTML = isDark ? '&#9681;' : '&#9680;';
+    }
+    themeBtn.addEventListener('click', function () {
+      toggleTheme();
+      updateThemeIcon();
+    });
+    updateThemeIcon();
+    panel.appendChild(themeBtn);
+
+    document.body.appendChild(panel);
+
+    // Hide the original #theme-toggle on briefing pages
+    var oldThemeToggle = document.getElementById('theme-toggle');
+    if (oldThemeToggle) oldThemeToggle.style.display = 'none';
+
+    // Scroll-based visibility
+    function update() {
+      var masthead = document.querySelector('.masthead');
+      var mastheadBottom = masthead ? masthead.getBoundingClientRect().bottom : 0;
+      panel.classList.toggle('visible', mastheadBottom < 0);
+
+      // Back-to-top: show after 15% scroll
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      var pct = h > 0 ? window.scrollY / h : 0;
+      bttBtn.classList.toggle('rt-hidden', pct <= 0.15);
+    }
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+
+    // T-key shortcut (moved from initBackToTop)
+    document.addEventListener('keydown', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.key === 't' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+
+    // Expose references for other init functions
+    window.__readingTools = {
+      panel: panel,
+      tocBtn: tocBtn,
+      focusBtn: focusBtn,
+      notesBtn: notesBtn,
+      notesBadge: badge,
+      themeBtn: themeBtn,
+      bttBtn: bttBtn,
+      updateThemeIcon: updateThemeIcon
+    };
+  }
+
   // ── Init ─────────────────────────────────────────────────────
 
   if (document.readyState === 'loading') {
@@ -1674,6 +1745,9 @@
     // Section wrapping (must run first — before TOC reads headings)
     wrapSections();
 
+    // Reading tools panel (must init before TOC, Focus, etc. so they can wire to it)
+    initReadingToolsPanel();
+
     // Progress bar and TOC work without auth
     initProgress();
     initReadingTime();
@@ -1681,7 +1755,6 @@
     initBookmarks();
     initFocusMode();
     initScrollMemory();
-    initBackToTop();
     initKeyboardHelp();
     initTOCEnhancements();
     initPrevNext();
