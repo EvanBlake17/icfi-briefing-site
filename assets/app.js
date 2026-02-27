@@ -789,18 +789,24 @@
       if (!tooltip.contains(e.target)) tooltip.style.display = 'none';
     });
 
+    var savedRange = null;
+
     function showTooltip() {
       var sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) {
         tooltip.style.display = 'none';
+        savedRange = null;
         return;
       }
       var range = sel.getRangeAt(0);
       var ancestor = range.commonAncestorContainer;
-      if (!content.contains(ancestor)) { tooltip.style.display = 'none'; return; }
+      if (!content.contains(ancestor)) { tooltip.style.display = 'none'; savedRange = null; return; }
 
       var el = ancestor.nodeType === 3 ? ancestor.parentNode : ancestor;
-      if (el.closest && el.closest('.user-highlight')) { tooltip.style.display = 'none'; return; }
+      if (el.closest && el.closest('.user-highlight')) { tooltip.style.display = 'none'; savedRange = null; return; }
+
+      // Save a copy of the range so it can't shift before the click
+      savedRange = range.cloneRange();
 
       var rect = range.getBoundingClientRect();
       tooltip.style.display = 'block';
@@ -817,18 +823,22 @@
 
     // Reusable highlight creation
     function performHighlight(color) {
-      var sel = window.getSelection();
-      if (!sel || sel.isCollapsed) return;
-
-      var range = sel.getRangeAt(0);
-      var text = sel.toString().trim();
+      var range = savedRange;
+      if (!range) {
+        var sel = window.getSelection();
+        if (!sel || sel.isCollapsed) return;
+        range = sel.getRangeAt(0);
+      }
+      var text = range.toString().trim();
       if (!text) return;
 
       var section = findSection(range.startContainer);
       var tempId = 'hl-' + Date.now();
 
       applyHighlight(range, tempId, color);
-      sel.removeAllRanges();
+      var sel = window.getSelection();
+      if (sel) sel.removeAllRanges();
+      savedRange = null;
       tooltip.style.display = 'none';
 
       var hl = { id: tempId, text: text, sectionId: section.id, sectionTitle: section.title, ts: Date.now(), annotation: '', color: color };
