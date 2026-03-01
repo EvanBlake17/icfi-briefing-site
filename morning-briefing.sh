@@ -10,16 +10,16 @@
 # Token usage is tracked for each Claude invocation and saved to a report.
 #
 # Designed to run unattended via launchd at 6:00 AM Eastern.
-# Logs to ~/icfi-work/briefing/logs/YYYY-MM-DD.log
-# Token report: ~/icfi-work/briefing/logs/YYYY-MM-DD_tokens.md
+# Logs to ~/Projects/editorial/briefing/briefing/logs/YYYY-MM-DD.log
+# Token report: ~/Projects/editorial/briefing/briefing/logs/YYYY-MM-DD_tokens.md
 
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 CLAUDE="$HOME/.local/bin/claude"
-WORK_DIR="$HOME/icfi-work"
-SITE_DIR="$HOME/icfi-briefing-site"
+WORK_DIR="$HOME/Projects/editorial/briefing"
+SITE_DIR="$HOME/Projects/editorial/briefing"
 LOGDIR="$WORK_DIR/briefing/logs"
 DATE="$(date +%Y-%m-%d)"
 DATE_HUMAN="$(date '+%B %-d, %Y')"
@@ -31,6 +31,34 @@ export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/us
 
 # Allow running from within a Claude Code session (e.g., manual re-runs)
 unset CLAUDECODE 2>/dev/null || true
+
+# Source credentials for headless (launchd) runs.
+# The claude CLI needs CLAUDE_CODE_OAUTH_TOKEN — interactive shells get it
+# from Claude Desktop, but launchd doesn't.  ~/.briefing-env provides it.
+if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" && -f "$HOME/.briefing-env" ]]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.briefing-env"
+fi
+
+# ── Lockfile (prevent concurrent runs) ────────────────────────────────────────
+
+LOCKFILE="$HOME/.briefing-pipeline.lock"
+
+cleanup_lock() {
+  rm -f "$LOCKFILE"
+}
+
+# Check for an existing lock. If the PID in the lockfile is still running, exit.
+if [[ -f "$LOCKFILE" ]]; then
+  LOCK_PID="$(cat "$LOCKFILE" 2>/dev/null || echo "")"
+  if [[ -n "$LOCK_PID" ]] && kill -0 "$LOCK_PID" 2>/dev/null; then
+    echo "[$(date '+%H:%M:%S')] Another pipeline (PID $LOCK_PID) is already running — exiting." >> "${LOGDIR:-/tmp}/$DATE.log"
+    exit 0
+  fi
+  # Stale lockfile — previous run crashed. Clean up and continue.
+fi
+echo $$ > "$LOCKFILE"
+trap cleanup_lock EXIT
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +76,30 @@ die() {
 
 notify() {
   osascript -e "display notification \"$*\" with title \"Morning Briefing\"" 2>/dev/null || true
+}
+
+# Timeout wrapper: run_with_timeout <seconds> <command...>
+# Kills the command if it exceeds the time limit.
+run_with_timeout() {
+  local timeout_secs="$1"
+  shift
+  "$@" &
+  local cmd_pid=$!
+  (
+    sleep "$timeout_secs"
+    if kill -0 "$cmd_pid" 2>/dev/null; then
+      log "WARNING: Command timed out after ${timeout_secs}s — killing PID $cmd_pid"
+      kill "$cmd_pid" 2>/dev/null
+      sleep 5
+      kill -9 "$cmd_pid" 2>/dev/null
+    fi
+  ) &
+  local watchdog_pid=$!
+  wait "$cmd_pid" 2>/dev/null
+  local exit_code=$?
+  kill "$watchdog_pid" 2>/dev/null
+  wait "$watchdog_pid" 2>/dev/null
+  return "$exit_code"
 }
 
 # Record a step's timing to the token report
@@ -87,6 +139,14 @@ if [[ -f "$SITE_DIR/briefings/$DATE.html" ]]; then
   exit 0
 fi
 
+# Pre-flight auth check — catch expired tokens early instead of after a long run
+log "Preflight: Testing claude CLI authentication..."
+AUTH_TEST=$("$CLAUDE" -p "Say OK" \
+  --max-turns 1 \
+  --dangerously-skip-permissions \
+  2>> "$LOGFILE") || die "claude CLI auth check failed — check CLAUDE_CODE_OAUTH_TOKEN in ~/.briefing-env"
+log "Preflight: Auth OK"
+
 # Initialize token report
 {
   echo "# Token Usage Report: $DATE_HUMAN"
@@ -96,47 +156,126 @@ fi
   echo "---"
 } > "$TOKEN_REPORT"
 
+# ── Token extraction helper ──────────────────────────────────────────────────
+
+# Extract token usage from claude CLI JSON output
+# Usage: extract_tokens "$JSON_OUTPUT"
+# Sets: STEP_INPUT_TOKENS, STEP_OUTPUT_TOKENS, STEP_CACHE_READ, STEP_CACHE_CREATE, STEP_TOTAL_TOKENS
+extract_tokens() {
+  local json_output="$1"
+  local usage_info
+  usage_info=$(echo "$json_output" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    # claude CLI --output-format json nests usage differently depending on version
+    usage = data.get('usage', {})
+    # Also check for session-level stats
+    stats = data.get('session', {}).get('usage', usage)
+    input_t = stats.get('input_tokens', usage.get('input_tokens', 0))
+    output_t = stats.get('output_tokens', usage.get('output_tokens', 0))
+    cache_read = stats.get('cache_read_tokens', usage.get('cache_read_tokens', 0))
+    cache_create = stats.get('cache_creation_tokens', usage.get('cache_creation_tokens', 0))
+    total = input_t + output_t + cache_read + cache_create
+    print(f'input_tokens={input_t}')
+    print(f'output_tokens={output_t}')
+    print(f'cache_read_tokens={cache_read}')
+    print(f'cache_creation_tokens={cache_create}')
+    print(f'total_tokens={total}')
+except Exception as e:
+    print(f'input_tokens=unknown')
+    print(f'output_tokens=unknown')
+    print(f'cache_read_tokens=unknown')
+    print(f'cache_creation_tokens=unknown')
+    print(f'total_tokens=unknown')
+" 2>/dev/null || echo "input_tokens=unknown
+output_tokens=unknown
+cache_read_tokens=unknown
+cache_creation_tokens=unknown
+total_tokens=unknown")
+
+  STEP_INPUT_TOKENS=$(echo "$usage_info" | grep '^input_tokens=' | cut -d= -f2)
+  STEP_OUTPUT_TOKENS=$(echo "$usage_info" | grep '^output_tokens=' | cut -d= -f2)
+  STEP_CACHE_READ=$(echo "$usage_info" | grep '^cache_read_tokens=' | cut -d= -f2)
+  STEP_CACHE_CREATE=$(echo "$usage_info" | grep '^cache_creation_tokens=' | cut -d= -f2)
+  STEP_TOTAL_TOKENS=$(echo "$usage_info" | grep '^total_tokens=' | cut -d= -f2)
+}
+
 # ── Step 1: Research ──────────────────────────────────────────────────────────
 
 log "Step 1/4: Running briefing-research agent..."
 STEP1_START=$(date +%s)
 
-"$CLAUDE" -p \
-  "Today is $DATE_HUMAN. Use the briefing-research agent to gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to briefing/daily/${DATE}_raw.md following the agent's output format. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL." \
+STEP1_STDERR="$(mktemp /tmp/briefing-s1-XXXXXX)"
+STEP1_OUTPUT=$("$CLAUDE" -p \
+  "Today is $DATE_HUMAN. Use the briefing-research agent to gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to briefing/daily/${DATE}_raw.md following the agent's output format. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Gather world economy data — stock indices, gold/silver/oil prices, crypto, central bank decisions, major economic data releases. (5) Scan the pseudo-left press (Jacobin, Left Voice, PSL/Liberation News, Socialist Alternative, SWP UK, Socialist Appeal/RCP IMT) — collect 2-3 significant article headlines, URLs, and 1-2 sentence political summaries per tendency. (6) Gather arts and culture material — major film, literary, theater, music developments from the past 24 hours. (7) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL." \
+  --output-format json \
   --dangerously-skip-permissions \
-  >> "$LOGFILE" 2>&1 || die "Research agent failed (exit code $?)"
+  2> "$STEP1_STDERR") ; STEP1_EXIT=$?
+cat "$STEP1_STDERR" >> "$LOGFILE"
+rm -f "$STEP1_STDERR"
 
 STEP1_END=$(date +%s)
 STEP1_DUR=$((STEP1_END - STEP1_START))
 
+# Check for the output file — the definitive success signal.
+# The CLI may exit non-zero due to warnings even when the file is created.
 if [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_raw.md" ]]; then
-  die "Research agent completed but ${DATE}_raw.md was not created"
+  die "Research agent failed (exit code $STEP1_EXIT): ${DATE}_raw.md was not created"
+fi
+if [[ $STEP1_EXIT -ne 0 ]]; then
+  log "WARNING: Research agent exited with code $STEP1_EXIT but output file was created — continuing"
 fi
 
 RAW_SIZE="$(wc -c < "$WORK_DIR/briefing/daily/${DATE}_raw.md")"
-log "Step 1 complete: ${DATE}_raw.md created (${RAW_SIZE} bytes, ${STEP1_DUR}s)"
-record_step "Step 1: Research Agent" "$STEP1_DUR" "| Output size | ${RAW_SIZE} bytes |"
+RAW_LINES="$(wc -l < "$WORK_DIR/briefing/daily/${DATE}_raw.md" | tr -d ' ')"
+extract_tokens "$STEP1_OUTPUT"
+log "Step 1 complete: ${DATE}_raw.md created (${RAW_SIZE} bytes, ${RAW_LINES} lines, ${STEP1_DUR}s)"
+log "Step 1 tokens — input: $STEP_INPUT_TOKENS, output: $STEP_OUTPUT_TOKENS, cache_read: $STEP_CACHE_READ, cache_create: $STEP_CACHE_CREATE"
+record_step "Step 1: Research Agent (Sonnet)" "$STEP1_DUR" "| Model | Claude Sonnet |
+| Output size | ${RAW_SIZE} bytes (${RAW_LINES} lines) |
+| Input tokens | $STEP_INPUT_TOKENS |
+| Output tokens | $STEP_OUTPUT_TOKENS |
+| Cache read tokens | $STEP_CACHE_READ |
+| Cache creation tokens | $STEP_CACHE_CREATE |
+| Total tokens | $STEP_TOTAL_TOKENS |"
 
 # ── Step 2: Writer ────────────────────────────────────────────────────────────
 
 log "Step 2/4: Running briefing-writer agent..."
 STEP2_START=$(date +%s)
 
-"$CLAUDE" -p \
-  "Today is $DATE_HUMAN. Use the briefing-writer agent to synthesize the final daily briefing from the raw material in briefing/daily/${DATE}_raw.md. Save the finished briefing to briefing/daily/${DATE}_full.md. IMPORTANT: You MUST read and follow the formatting guide at briefing/briefing-format.md exactly. Key requirements: (1) Start with a 'What we\\'re covering today' summary section with 4-8 concise bullet points before the first horizontal rule. (2) Use sentence case for ALL headings — capitalize only the first word and proper nouns. (3) End each topic section with a source attribution block using the HTML format specified in the format guide — every link MUST include target=_blank rel=noopener so links open in new tabs. (4) Top stories must be objectively the most important world events — do NOT put a story in Top stories if it is only covered by a single WSWS article. (5) Write a ~500-word science/technology/public health section with major studies, disease updates, and COVID/flu data. (6) End with a 'What the WSWS should cover today' section with at least 5 prioritized suggestions, each with a headline, description, and source link." \
+STEP2_STDERR="$(mktemp /tmp/briefing-s2-XXXXXX)"
+STEP2_OUTPUT=$("$CLAUDE" -p \
+  "Today is $DATE_HUMAN. Use the briefing-writer agent to synthesize the final daily briefing from the raw material in briefing/daily/${DATE}_raw.md. Save the finished briefing to briefing/daily/${DATE}_full.md. IMPORTANT: You MUST read and follow the formatting guide at briefing/briefing-format.md exactly. Key requirements: (1) Start with a 'What we're covering today' summary section with 4-8 concise bullet points. (2) Every major section MUST open with section summary bullets — each bullet links to the item's heading and provides the most critical fact, NOT a restatement of the headline. (3) Use sentence case for ALL headings. (4) End each topic section with source attribution using the HTML format in the format guide — every link MUST include target=_blank rel=noopener. (5) Top stories must be objectively the most important world events — no WSWS-only stories in news sections. (6) Write a ~400-word world economy section (stocks, gold/silver/oil, crypto, economic data). (7) Write a ~500-word science/technology/public health section. (8) Write a ~500-word arts and culture section using the WSWS analytical framework. (9) Write a ~750-word pseudo-left press review covering Jacobin/DSA, Left Voice, PSL, Socialist Alternative, SWP UK, and Socialist Appeal/RCP IMT — 2-3 articles per tendency, political line identified, anti-Marxist positions flagged. (10) End with at least 5 coverage suggestions with headlines, descriptions, and source links. (11) Target ~10,000 words total." \
+  --output-format json \
   --dangerously-skip-permissions \
-  >> "$LOGFILE" 2>&1 || die "Writer agent failed (exit code $?)"
+  2> "$STEP2_STDERR") ; STEP2_EXIT=$?
+cat "$STEP2_STDERR" >> "$LOGFILE"
+rm -f "$STEP2_STDERR"
 
 STEP2_END=$(date +%s)
 STEP2_DUR=$((STEP2_END - STEP2_START))
 
 if [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_full.md" ]]; then
-  die "Writer agent completed but ${DATE}_full.md was not created"
+  die "Writer agent failed (exit code $STEP2_EXIT): ${DATE}_full.md was not created"
+fi
+if [[ $STEP2_EXIT -ne 0 ]]; then
+  log "WARNING: Writer agent exited with code $STEP2_EXIT but output file was created — continuing"
 fi
 
 FULL_SIZE="$(wc -c < "$WORK_DIR/briefing/daily/${DATE}_full.md")"
-log "Step 2 complete: ${DATE}_full.md created (${FULL_SIZE} bytes, ${STEP2_DUR}s)"
-record_step "Step 2: Writer Agent" "$STEP2_DUR" "| Output size | ${FULL_SIZE} bytes |"
+FULL_WORDS="$(wc -w < "$WORK_DIR/briefing/daily/${DATE}_full.md" | tr -d ' ')"
+extract_tokens "$STEP2_OUTPUT"
+log "Step 2 complete: ${DATE}_full.md created (${FULL_SIZE} bytes, ${FULL_WORDS} words, ${STEP2_DUR}s)"
+log "Step 2 tokens — input: $STEP_INPUT_TOKENS, output: $STEP_OUTPUT_TOKENS, cache_read: $STEP_CACHE_READ, cache_create: $STEP_CACHE_CREATE"
+record_step "Step 2: Writer Agent (Opus)" "$STEP2_DUR" "| Model | Claude Opus |
+| Output size | ${FULL_SIZE} bytes (${FULL_WORDS} words) |
+| Input tokens | $STEP_INPUT_TOKENS |
+| Output tokens | $STEP_OUTPUT_TOKENS |
+| Cache read tokens | $STEP_CACHE_READ |
+| Cache creation tokens | $STEP_CACHE_CREATE |
+| Total tokens | $STEP_TOTAL_TOKENS |"
 
 # ── Step 3: Translate to German ───────────────────────────────────────────────
 
@@ -178,6 +317,18 @@ record_step "Step 4: Publish" "$STEP4_DUR"
 ELAPSED="$SECONDS"
 MINS=$((ELAPSED / 60))
 
+# Re-read the token report to extract all token values for a grand total
+GRAND_TOTAL=$(python3 -c "
+import re, sys
+total = 0
+with open('$TOKEN_REPORT') as f:
+    for line in f:
+        m = re.search(r'\| Total tokens \| (\d+)', line)
+        if m:
+            total += int(m.group(1))
+print(total)
+" 2>/dev/null || echo "unknown")
+
 {
   echo "---"
   echo ""
@@ -187,16 +338,17 @@ MINS=$((ELAPSED / 60))
   echo "|--------|-------|"
   echo "| Date | $DATE_HUMAN |"
   echo "| Total duration | ${MINS}m $((ELAPSED % 60))s |"
-  echo "| Step 1 (Research) | ${STEP1_DUR}s |"
-  echo "| Step 2 (Writer) | ${STEP2_DUR}s |"
-  echo "| Step 3 (Translate) | ${STEP3_DUR}s |"
+  echo "| Step 1 (Research/Sonnet) | ${STEP1_DUR}s |"
+  echo "| Step 2 (Writer/Opus) | ${STEP2_DUR}s |"
+  echo "| Step 3 (Translate/Sonnet) | ${STEP3_DUR}s |"
   echo "| Step 4 (Publish) | ${STEP4_DUR}s |"
-  echo "| English briefing | ${FULL_SIZE:-0} bytes |"
+  echo "| English briefing | ${FULL_SIZE:-0} bytes (${FULL_WORDS:-0} words) |"
   if [[ -f "$WORK_DIR/briefing/daily/${DATE}_full_de.md" ]]; then
     echo "| German translation | ${DE_SIZE:-0} bytes |"
   else
     echo "| German translation | skipped |"
   fi
+  echo "| **Grand total tokens** | **${GRAND_TOTAL}** |"
   echo "| Pipeline finished | $(date '+%H:%M:%S') |"
   echo ""
 } >> "$TOKEN_REPORT"
