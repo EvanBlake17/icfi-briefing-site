@@ -206,14 +206,41 @@ total_tokens=unknown")
 log "Step 1/4: Running briefing-research agent..."
 STEP1_START=$(date +%s)
 
+# Use --agent to run AS the briefing-research agent directly.
+# This eliminates the fragile Task-tool indirection where an outer session
+# had to parse "Use the briefing-research agent" and spawn a subagent.
+# With --agent, the -p session IS the agent — same tools, model, and instructions.
+#
+# Output goes to a temp file so we can apply a 90-minute timeout as a safety net.
+STEP1_OUTFILE="$(mktemp /tmp/briefing-s1out-XXXXXX)"
 STEP1_STDERR="$(mktemp /tmp/briefing-s1-XXXXXX)"
-STEP1_OUTPUT=$("$CLAUDE" -p \
-  "Today is $DATE_HUMAN. Use the briefing-research agent to gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to briefing/daily/${DATE}_raw.md following the agent's output format. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Gather world economy data — stock indices, gold/silver/oil prices, crypto, central bank decisions, major economic data releases. (5) Scan the pseudo-left press (Jacobin, Left Voice, PSL/Liberation News, Socialist Alternative, SWP UK, Socialist Appeal/RCP IMT) — collect 2-3 significant article headlines, URLs, and 1-2 sentence political summaries per tendency. (6) Gather arts and culture material — major film, literary, theater, music developments from the past 24 hours. (7) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL." \
+
+"$CLAUDE" -p \
+  "Today is $DATE_HUMAN. Gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to $WORK_DIR/briefing/daily/${DATE}_raw.md following the output format in your instructions. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Gather world economy data — stock indices, gold/silver/oil prices, crypto, central bank decisions, major economic data releases. (5) Scan the pseudo-left press (Jacobin, Left Voice, PSL/Liberation News, Socialist Alternative, SWP UK, Socialist Appeal/RCP IMT) — collect 2-3 significant article headlines, URLs, and 1-2 sentence political summaries per tendency. (6) Gather arts and culture material — major film, literary, theater, music developments from the past 24 hours. (7) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL." \
+  --agent briefing-research \
   --output-format json \
   --dangerously-skip-permissions \
-  2> "$STEP1_STDERR") ; STEP1_EXIT=$?
+  > "$STEP1_OUTFILE" 2> "$STEP1_STDERR" &
+STEP1_PID=$!
+
+# 90-minute timeout — kills the agent if it hangs
+( sleep 5400
+  if kill -0 "$STEP1_PID" 2>/dev/null; then
+    log "WARNING: Research agent timed out after 90 minutes — killing PID $STEP1_PID"
+    kill "$STEP1_PID" 2>/dev/null
+    sleep 5
+    kill -9 "$STEP1_PID" 2>/dev/null
+  fi
+) &
+STEP1_WATCHDOG=$!
+
+wait "$STEP1_PID" 2>/dev/null ; STEP1_EXIT=$?
+kill "$STEP1_WATCHDOG" 2>/dev/null || true
+wait "$STEP1_WATCHDOG" 2>/dev/null || true
+
+STEP1_OUTPUT="$(cat "$STEP1_OUTFILE" 2>/dev/null || echo "{}")"
 cat "$STEP1_STDERR" >> "$LOGFILE"
-rm -f "$STEP1_STDERR"
+rm -f "$STEP1_OUTFILE" "$STEP1_STDERR"
 
 STEP1_END=$(date +%s)
 STEP1_DUR=$((STEP1_END - STEP1_START))
@@ -245,14 +272,36 @@ record_step "Step 1: Research Agent (Sonnet)" "$STEP1_DUR" "| Model | Claude Son
 log "Step 2/4: Running briefing-writer agent..."
 STEP2_START=$(date +%s)
 
+# Same --agent pattern: run AS the briefing-writer agent directly.
+# 60-minute timeout for writer agent (it reads existing material, doesn't do web research).
+STEP2_OUTFILE="$(mktemp /tmp/briefing-s2out-XXXXXX)"
 STEP2_STDERR="$(mktemp /tmp/briefing-s2-XXXXXX)"
-STEP2_OUTPUT=$("$CLAUDE" -p \
-  "Today is $DATE_HUMAN. Use the briefing-writer agent to synthesize the final daily briefing from the raw material in briefing/daily/${DATE}_raw.md. Save the finished briefing to briefing/daily/${DATE}_full.md. IMPORTANT: You MUST read and follow the formatting guide at briefing/briefing-format.md exactly. Key requirements: (1) Start with a 'What we're covering today' summary section with 4-8 concise bullet points. (2) Every major section MUST open with section summary bullets — each bullet links to the item's heading and provides the most critical fact, NOT a restatement of the headline. (3) Use sentence case for ALL headings. (4) End each topic section with source attribution using the HTML format in the format guide — every link MUST include target=_blank rel=noopener. (5) Top stories must be objectively the most important world events — no WSWS-only stories in news sections. (6) Write a ~400-word world economy section (stocks, gold/silver/oil, crypto, economic data). (7) Write a ~500-word science/technology/public health section. (8) Write a ~500-word arts and culture section using the WSWS analytical framework. (9) Write a ~750-word pseudo-left press review covering Jacobin/DSA, Left Voice, PSL, Socialist Alternative, SWP UK, and Socialist Appeal/RCP IMT — 2-3 articles per tendency, political line identified, anti-Marxist positions flagged. (10) End with at least 5 coverage suggestions with headlines, descriptions, and source links. (11) Target ~10,000 words total." \
+
+"$CLAUDE" -p \
+  "Today is $DATE_HUMAN. Synthesize the final daily briefing from the raw material in $WORK_DIR/briefing/daily/${DATE}_raw.md. Save the finished briefing to $WORK_DIR/briefing/daily/${DATE}_full.md. IMPORTANT: You MUST read and follow the formatting guide at $WORK_DIR/briefing/briefing-format.md exactly. Key requirements: (1) Start with a 'What we're covering today' summary section with 4-8 concise bullet points. (2) Every major section MUST open with section summary bullets — each bullet links to the item's heading and provides the most critical fact, NOT a restatement of the headline. (3) Use sentence case for ALL headings. (4) End each topic section with source attribution using the HTML format in the format guide — every link MUST include target=_blank rel=noopener. (5) Top stories must be objectively the most important world events — no WSWS-only stories in news sections. (6) Write a ~400-word world economy section (stocks, gold/silver/oil, crypto, economic data). (7) Write a ~500-word science/technology/public health section. (8) Write a ~500-word arts and culture section using the WSWS analytical framework. (9) Write a ~750-word pseudo-left press review covering Jacobin/DSA, Left Voice, PSL, Socialist Alternative, SWP UK, and Socialist Appeal/RCP IMT — 2-3 articles per tendency, political line identified, anti-Marxist positions flagged. (10) End with at least 5 coverage suggestions with headlines, descriptions, and source links. (11) Target ~10,000 words total." \
+  --agent briefing-writer \
   --output-format json \
   --dangerously-skip-permissions \
-  2> "$STEP2_STDERR") ; STEP2_EXIT=$?
+  > "$STEP2_OUTFILE" 2> "$STEP2_STDERR" &
+STEP2_PID=$!
+
+( sleep 3600
+  if kill -0 "$STEP2_PID" 2>/dev/null; then
+    log "WARNING: Writer agent timed out after 60 minutes — killing PID $STEP2_PID"
+    kill "$STEP2_PID" 2>/dev/null
+    sleep 5
+    kill -9 "$STEP2_PID" 2>/dev/null
+  fi
+) &
+STEP2_WATCHDOG=$!
+
+wait "$STEP2_PID" 2>/dev/null ; STEP2_EXIT=$?
+kill "$STEP2_WATCHDOG" 2>/dev/null || true
+wait "$STEP2_WATCHDOG" 2>/dev/null || true
+
+STEP2_OUTPUT="$(cat "$STEP2_OUTFILE" 2>/dev/null || echo "{}")"
 cat "$STEP2_STDERR" >> "$LOGFILE"
-rm -f "$STEP2_STDERR"
+rm -f "$STEP2_OUTFILE" "$STEP2_STDERR"
 
 STEP2_END=$(date +%s)
 STEP2_DUR=$((STEP2_END - STEP2_START))

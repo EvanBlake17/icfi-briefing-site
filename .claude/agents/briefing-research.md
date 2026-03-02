@@ -1,7 +1,7 @@
 ---
 name: briefing-research
 description: Morning briefing research agent. Use FIRST each morning to gather all raw news material, WSWS articles, and source data for the daily briefing. Saves structured raw material to an intermediate file. Always run this BEFORE the briefing-writer agent.
-tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
+tools: Read, Write, Grep, Glob, Bash, WebFetch, WebSearch
 model: sonnet
 ---
 

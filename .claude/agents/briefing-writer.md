@@ -1,7 +1,7 @@
 ---
 name: briefing-writer
 description: Morning briefing writer agent. Use AFTER the briefing-research agent has gathered raw material. Reads the intermediate raw file and synthesizes the final daily briefing. Produces the finished briefing.
-tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
+tools: Read, Write, Grep, Glob, Bash, WebFetch, WebSearch
 model: opus
 ---
 

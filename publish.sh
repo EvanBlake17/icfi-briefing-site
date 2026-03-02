@@ -2,7 +2,7 @@
 # publish.sh — Convert a markdown briefing to HTML and publish to GitHub Pages
 #
 # Usage:
-#   ./publish.sh 2026-02-26                    ← looks for ~/icfi-work/briefing/daily/2026-02-26_full.md
+#   ./publish.sh 2026-02-26                    ← looks for briefing/daily/2026-02-26_full.md
 #   ./publish.sh path/to/any-file.md           ← explicit path (filename must start with YYYY-MM-DD)
 #   ./publish.sh 2026-02-26 "commit message"   ← optional custom commit message
 #
@@ -11,13 +11,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BRIEFING_DIR="$HOME/icfi-work/briefing/daily"
+BRIEFING_DIR="$HOME/Projects/editorial/briefing/briefing/daily"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 usage() {
   echo "Usage:"
-  echo "  $0 YYYY-MM-DD                  # uses ~/icfi-work/briefing/daily/YYYY-MM-DD_full.md"
+  echo "  $0 YYYY-MM-DD                  # uses briefing/daily/YYYY-MM-DD_full.md"
   echo "  $0 path/to/YYYY-MM-DD*.md      # explicit file path"
   echo "  $0 YYYY-MM-DD \"commit message\" # optional commit message"
   exit 1

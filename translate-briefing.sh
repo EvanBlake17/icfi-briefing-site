@@ -5,20 +5,26 @@
 #   ./translate-briefing.sh 2026-02-26                    ← translates today's briefing
 #   ./translate-briefing.sh 2026-02-26 --dry-run          ← show what would be translated
 #
-# Requires: claude CLI
-# Output: ~/icfi-work/briefing/daily/{DATE}_full_de.md
-# Token report appended to: ~/icfi-work/briefing/logs/{DATE}_tokens.md
+# Requires: claude CLI (authenticated via `claude setup-token`)
+# Output: ~/Projects/editorial/briefing/briefing/daily/{DATE}_full_de.md
+# Token report appended to: ~/Projects/editorial/briefing/briefing/logs/{DATE}_tokens.md
 
 set -euo pipefail
 
 # Allow running from within a Claude Code session
 unset CLAUDECODE 2>/dev/null || true
 
+# Source credentials for headless (launchd) runs
+if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" && -f "$HOME/.briefing-env" ]]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.briefing-env"
+fi
+
 CLAUDE="$HOME/.local/bin/claude"
-WORK_DIR="$HOME/icfi-work"
+WORK_DIR="$HOME/Projects/editorial/briefing"
 BRIEFING_DIR="$WORK_DIR/briefing/daily"
 LOGDIR="$WORK_DIR/briefing/logs"
-SITE_DIR="$HOME/icfi-briefing-site"
+SITE_DIR="$HOME/Projects/editorial/briefing"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -73,87 +79,61 @@ mkdir -p "$LOGDIR" "$BRIEFING_DIR"
 
 # ── Read English content ──────────────────────────────────────────────────────
 
-EN_CONTENT="$(cat "$EN_FILE")"
-EN_WORDS=$(echo "$EN_CONTENT" | wc -w | tr -d ' ')
+EN_WORDS=$(wc -w < "$EN_FILE" | tr -d ' ')
 log "English source: $EN_WORDS words"
 
-# ── Translate using Claude Opus ───────────────────────────────────────────────
+# ── Build prompt file ────────────────────────────────────────────────────────
+# Write the full prompt to a temp file to avoid a 70KB shell argument
 
-log "Translating to German using Claude Sonnet..."
+PROMPT_FILE="$(mktemp /tmp/translate-prompt-XXXXXX)"
+trap 'rm -f "$PROMPT_FILE"' EXIT
 
-TRANSLATE_START=$(date +%s)
-
-# Use --output-format json to capture token usage
-RESULT=$("$CLAUDE" -p "You are a professional German translator specializing in political journalism and international affairs. Translate the following English morning briefing into fluent, natural German.
-
-CRITICAL RULES:
-1. Translate ALL prose text into German — headings, body paragraphs, bullet points, coverage suggestions
-2. Keep ALL HTML markup exactly as-is (div tags, class names, href URLs, target attributes, rel attributes)
-3. Keep ALL URLs unchanged — do not translate URLs
-4. Keep publication names in their original language (e.g., 'The New York Times' stays English, 'Der Spiegel' stays German)
-5. Keep proper nouns (people's names, organization names, place names) in their commonly used form
-6. Use formal German (Sie) for any reader-addressing text
-7. Maintain the exact same Markdown structure — headings (##, ###), horizontal rules (---), bullet points, bold text
-8. The source attribution blocks with class='source-links' must keep their HTML structure — only translate the label text 'Sources' to 'Quellen'
-9. Translate 'What we\\'re covering today' to 'Was wir heute behandeln'
-10. Translate 'What the WSWS should cover today' to 'Was die WSWS heute abdecken sollte'
+cat > "$PROMPT_FILE" <<'RULES_EOF'
+Translate the following English morning briefing into fluent, natural German. Rules:
+1. Translate ALL prose text — headings, body, bullets, coverage suggestions
+2. Keep ALL HTML markup exactly as-is (tags, class names, href URLs, target/rel attributes)
+3. Keep ALL URLs unchanged
+4. Keep publication names in original language (e.g., 'The New York Times' stays English)
+5. Keep proper nouns in commonly used form
+6. Use formal German (Sie)
+7. Maintain exact Markdown structure (##, ###, ---, bullets, bold)
+8. Translate 'Sources' to 'Quellen' in source-links blocks
+9. Translate 'What we're covering today' → 'Was wir heute behandeln'
+10. Translate 'What the WSWS should cover today' → 'Was die WSWS heute abdecken sollte'
 11. Output ONLY the translated Markdown — no commentary, no notes, no preamble
 
-Here is the English briefing to translate:
+RULES_EOF
 
-$EN_CONTENT" \
+cat "$EN_FILE" >> "$PROMPT_FILE"
+
+# ── Translate ────────────────────────────────────────────────────────────────
+# Run from /tmp to avoid loading project CLAUDE.md, agents, and tool definitions.
+# This cuts thousands of unnecessary input tokens from the system prompt.
+
+log "Translating to German using Claude Sonnet..."
+TRANSLATE_START=$(date +%s)
+
+(cd /tmp && "$CLAUDE" -p "$(cat "$PROMPT_FILE")" \
   --model sonnet \
-  --output-format json \
   --max-turns 1 \
   --dangerously-skip-permissions \
-  2>/dev/null) || die "Translation failed"
+  2>/dev/null) > "$DE_FILE" || die "Translation failed"
 
 TRANSLATE_END=$(date +%s)
 TRANSLATE_SECS=$((TRANSLATE_END - TRANSLATE_START))
 
-# ── Extract result and token usage ────────────────────────────────────────────
+# ── Validate output ─────────────────────────────────────────────────────────
 
-# Parse the JSON output — extract the result text
-# The claude CLI JSON output has a "result" field with the text
-TRANSLATED=$(echo "$RESULT" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-if isinstance(data, dict):
-    print(data.get('result', data.get('text', data.get('content', ''))))
-elif isinstance(data, str):
-    print(data)
-else:
-    print(str(data))
-" 2>/dev/null || echo "$RESULT")
-
-# Try to extract token usage from JSON
-USAGE_INFO=$(echo "$RESULT" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-usage = data.get('usage', {})
-input_t = usage.get('input_tokens', 'unknown')
-output_t = usage.get('output_tokens', 'unknown')
-total = 'unknown'
-if isinstance(input_t, int) and isinstance(output_t, int):
-    total = input_t + output_t
-print(f'input_tokens={input_t}')
-print(f'output_tokens={output_t}')
-print(f'total_tokens={total}')
-" 2>/dev/null || echo "input_tokens=unknown
-output_tokens=unknown
-total_tokens=unknown")
-
-INPUT_TOKENS=$(echo "$USAGE_INFO" | grep input_tokens | cut -d= -f2)
-OUTPUT_TOKENS=$(echo "$USAGE_INFO" | grep output_tokens | cut -d= -f2)
-TOTAL_TOKENS=$(echo "$USAGE_INFO" | grep total_tokens | cut -d= -f2)
-
-# ── Save translated content ──────────────────────────────────────────────────
-
-echo "$TRANSLATED" > "$DE_FILE"
 DE_WORDS=$(wc -w < "$DE_FILE" | tr -d ' ')
 
+# Sanity check: translated output should be at least 60% of source length
+MIN_WORDS=$(( EN_WORDS * 60 / 100 ))
+if [[ "$DE_WORDS" -lt "$MIN_WORDS" ]]; then
+  rm -f "$DE_FILE"
+  die "Translation too short ($DE_WORDS words vs $EN_WORDS source) — likely failed"
+fi
+
 log "Translation complete: $DE_WORDS words (${TRANSLATE_SECS}s)"
-log "Tokens — input: $INPUT_TOKENS, output: $OUTPUT_TOKENS, total: $TOTAL_TOKENS"
 
 # ── Append to token report ────────────────────────────────────────────────────
 
@@ -166,10 +146,7 @@ log "Tokens — input: $INPUT_TOKENS, output: $OUTPUT_TOKENS, total: $TOTAL_TOKE
   echo "| Model | Claude Sonnet |"
   echo "| Source words | $EN_WORDS |"
   echo "| Translated words | $DE_WORDS |"
-  echo "| Input tokens | $INPUT_TOKENS |"
-  echo "| Output tokens | $OUTPUT_TOKENS |"
-  echo "| Total tokens | $TOTAL_TOKENS |"
-  echo "| Duration | ${TRANSLATE_SECS}s |"
+  echo "| Duration | ${TRANSLATE_SECS}s ($(( TRANSLATE_SECS / 60 ))m $(( TRANSLATE_SECS % 60 ))s) |"
   echo "| Timestamp | $(date '+%Y-%m-%d %H:%M:%S') |"
   echo ""
 } >> "$TOKEN_REPORT"
