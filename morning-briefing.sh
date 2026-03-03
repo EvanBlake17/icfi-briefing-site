@@ -139,10 +139,15 @@ if [[ -f "$SITE_DIR/briefings/$DATE.html" ]]; then
   exit 0
 fi
 
-# Pre-flight auth check — catch expired tokens early instead of after a long run
+# Pre-flight auth check — catch expired tokens early instead of after a long run.
+# Uses haiku (cheapest/fastest model), disables tools and session persistence,
+# and skips project settings to avoid loading agents/MCP config.
 log "Preflight: Testing claude CLI authentication..."
 AUTH_TEST=$("$CLAUDE" -p "Say OK" \
   --max-turns 1 \
+  --model haiku \
+  --tools "" \
+  --no-session-persistence \
   --dangerously-skip-permissions \
   2>> "$LOGFILE") || die "claude CLI auth check failed — check CLAUDE_CODE_OAUTH_TOKEN in ~/.briefing-env"
 log "Preflight: Auth OK"
@@ -203,7 +208,7 @@ total_tokens=unknown")
 
 # ── Step 1: Research ──────────────────────────────────────────────────────────
 
-log "Step 1/4: Running briefing-research agent..."
+log "Step 1/3: Running briefing-research agent..."
 STEP1_START=$(date +%s)
 
 # Use --agent to run AS the briefing-research agent directly.
@@ -269,7 +274,7 @@ record_step "Step 1: Research Agent (Sonnet)" "$STEP1_DUR" "| Model | Claude Son
 
 # ── Step 2: Writer ────────────────────────────────────────────────────────────
 
-log "Step 2/4: Running briefing-writer agent..."
+log "Step 2/3: Running briefing-writer agent..."
 STEP2_START=$(date +%s)
 
 # Same --agent pattern: run AS the briefing-writer agent directly.
@@ -326,30 +331,15 @@ record_step "Step 2: Writer Agent (Opus)" "$STEP2_DUR" "| Model | Claude Opus |
 | Cache creation tokens | $STEP_CACHE_CREATE |
 | Total tokens | $STEP_TOTAL_TOKENS |"
 
-# ── Step 3: Translate to German ───────────────────────────────────────────────
+# ── Step 3: Translate to German (disabled) ────────────────────────────────────
+# Translation is temporarily disabled. Re-enable when needed by uncommenting.
 
-log "Step 3/4: Translating briefing to German..."
-STEP3_START=$(date +%s)
-
-"$SITE_DIR/translate-briefing.sh" "$DATE" >> "$LOGFILE" 2>&1 || {
-  log "WARNING: German translation failed — continuing with English only"
-}
-
-STEP3_END=$(date +%s)
-STEP3_DUR=$((STEP3_END - STEP3_START))
-
-if [[ -f "$WORK_DIR/briefing/daily/${DATE}_full_de.md" ]]; then
-  DE_SIZE="$(wc -c < "$WORK_DIR/briefing/daily/${DATE}_full_de.md")"
-  log "Step 3 complete: ${DATE}_full_de.md created (${DE_SIZE} bytes, ${STEP3_DUR}s)"
-  # Token details are appended by translate-briefing.sh itself
-else
-  log "Step 3 skipped: No German translation produced (${STEP3_DUR}s)"
-  record_step "Step 3: Translation (skipped)" "$STEP3_DUR"
-fi
+STEP3_DUR=0
+log "Step 3/3: Translation skipped (disabled)"
 
 # ── Step 4: Publish ───────────────────────────────────────────────────────────
 
-log "Step 4/4: Publishing to briefing site..."
+log "Step 3/3: Publishing to briefing site..."
 STEP4_START=$(date +%s)
 
 "$SITE_DIR/publish.sh" "$DATE" >> "$LOGFILE" 2>&1 \
