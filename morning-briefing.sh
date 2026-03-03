@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # morning-briefing.sh — Automated daily briefing pipeline
 #
-# Runs four steps in sequence:
+# Runs three steps in sequence:
 #   1. briefing-research agent → gathers raw material from WSWS + bourgeois press
-#   2. briefing-writer agent  → synthesizes the final briefing
-#   3. translate-briefing.sh  → translates English → German using Claude Sonnet
-#   4. publish.sh             → converts to HTML and pushes to GitHub Pages
+#   2. briefing-writer agent   → synthesizes the final briefing
+#   3. publish.sh              → converts to HTML and pushes to GitHub Pages
 #
 # Token usage is tracked for each Claude invocation and saved to a report.
 #
@@ -63,6 +62,10 @@ trap cleanup_lock EXIT
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 mkdir -p "$LOGDIR" "$WORK_DIR/briefing/daily"
+
+# Truncate launchd stdout log on each run to prevent unbounded growth.
+# The per-day log ($LOGFILE) is the durable record; launchd stdout is transient.
+: > "$LOGDIR/launchd-stdout.log" 2>/dev/null || true
 
 log() {
   echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOGFILE"
@@ -221,8 +224,9 @@ STEP1_OUTFILE="$(mktemp /tmp/briefing-s1out-XXXXXX)"
 STEP1_STDERR="$(mktemp /tmp/briefing-s1-XXXXXX)"
 
 "$CLAUDE" -p \
-  "Today is $DATE_HUMAN. Gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to $WORK_DIR/briefing/daily/${DATE}_raw.md following the output format in your instructions. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Gather world economy data — stock indices, gold/silver/oil prices, crypto, central bank decisions, major economic data releases. (5) Scan the pseudo-left press (Jacobin, Left Voice, PSL/Liberation News, Socialist Alternative, SWP UK, Socialist Appeal/RCP IMT) — collect 2-3 significant article headlines, URLs, and 1-2 sentence political summaries per tendency. (6) Gather arts and culture material — major film, literary, theater, music developments from the past 24 hours. (7) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL." \
+  "Today is $DATE_HUMAN. Gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to $WORK_DIR/briefing/daily/${DATE}_raw.md following the output format in your instructions. CRITICAL: Write the file INCREMENTALLY as instructed — write after Steps 1-2, update after Steps 3-5, update after Steps 6-7, and final update after Steps 8-10. Do NOT accumulate everything and write once at the end. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Gather world economy data — stock indices, gold/silver/oil prices, crypto, central bank decisions, major economic data releases. (5) Scan the pseudo-left press (Jacobin, Left Voice, PSL/Liberation News, Socialist Alternative, SWP UK, Socialist Appeal/RCP IMT) — collect 2-3 significant article headlines, URLs, and 1-2 sentence political summaries per tendency. (6) Gather arts and culture material — major film, literary, theater, music developments from the past 24 hours. (7) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL." \
   --agent briefing-research \
+  --max-turns 80 \
   --output-format json \
   --dangerously-skip-permissions \
   > "$STEP1_OUTFILE" 2> "$STEP1_STDERR" &
@@ -252,11 +256,17 @@ STEP1_DUR=$((STEP1_END - STEP1_START))
 
 # Check for the output file — the definitive success signal.
 # The CLI may exit non-zero due to warnings even when the file is created.
+# Thanks to incremental writing, even a timed-out agent may have produced a partial file.
 if [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_raw.md" ]]; then
   die "Research agent failed (exit code $STEP1_EXIT): ${DATE}_raw.md was not created"
 fi
 if [[ $STEP1_EXIT -ne 0 ]]; then
   log "WARNING: Research agent exited with code $STEP1_EXIT but output file was created — continuing"
+fi
+# Sanity check: file should have at least 50 lines to be useful
+RAW_LINE_COUNT="$(wc -l < "$WORK_DIR/briefing/daily/${DATE}_raw.md" | tr -d ' ')"
+if [[ "$RAW_LINE_COUNT" -lt 50 ]]; then
+  log "WARNING: Raw file has only $RAW_LINE_COUNT lines — may be incomplete but proceeding"
 fi
 
 RAW_SIZE="$(wc -c < "$WORK_DIR/briefing/daily/${DATE}_raw.md")"
@@ -285,6 +295,7 @@ STEP2_STDERR="$(mktemp /tmp/briefing-s2-XXXXXX)"
 "$CLAUDE" -p \
   "Today is $DATE_HUMAN. Synthesize the final daily briefing from the raw material in $WORK_DIR/briefing/daily/${DATE}_raw.md. Save the finished briefing to $WORK_DIR/briefing/daily/${DATE}_full.md. IMPORTANT: You MUST read and follow the formatting guide at $WORK_DIR/briefing/briefing-format.md exactly. Key requirements: (1) Start with a 'What we're covering today' summary section with 4-8 concise bullet points. (2) Every major section MUST open with section summary bullets — each bullet links to the item's heading and provides the most critical fact, NOT a restatement of the headline. (3) Use sentence case for ALL headings. (4) End each topic section with source attribution using the HTML format in the format guide — every link MUST include target=_blank rel=noopener. (5) Top stories must be objectively the most important world events — no WSWS-only stories in news sections. (6) Write a ~400-word world economy section (stocks, gold/silver/oil, crypto, economic data). (7) Write a ~500-word science/technology/public health section. (8) Write a ~500-word arts and culture section using the WSWS analytical framework. (9) Write a ~750-word pseudo-left press review covering Jacobin/DSA, Left Voice, PSL, Socialist Alternative, SWP UK, and Socialist Appeal/RCP IMT — 2-3 articles per tendency, political line identified, anti-Marxist positions flagged. (10) End with at least 5 coverage suggestions with headlines, descriptions, and source links. (11) Target ~10,000 words total." \
   --agent briefing-writer \
+  --max-turns 30 \
   --output-format json \
   --dangerously-skip-permissions \
   > "$STEP2_OUTFILE" 2> "$STEP2_STDERR" &
@@ -331,25 +342,19 @@ record_step "Step 2: Writer Agent (Opus)" "$STEP2_DUR" "| Model | Claude Opus |
 | Cache creation tokens | $STEP_CACHE_CREATE |
 | Total tokens | $STEP_TOTAL_TOKENS |"
 
-# ── Step 3: Translate to German (disabled) ────────────────────────────────────
-# Translation is temporarily disabled. Re-enable when needed by uncommenting.
-
-STEP3_DUR=0
-log "Step 3/3: Translation skipped (disabled)"
-
-# ── Step 4: Publish ───────────────────────────────────────────────────────────
+# ── Step 3: Publish ───────────────────────────────────────────────────────────
 
 log "Step 3/3: Publishing to briefing site..."
-STEP4_START=$(date +%s)
+STEP3_PUB_START=$(date +%s)
 
 "$SITE_DIR/publish.sh" "$DATE" >> "$LOGFILE" 2>&1 \
   || die "publish.sh failed (exit code $?)"
 
-STEP4_END=$(date +%s)
-STEP4_DUR=$((STEP4_END - STEP4_START))
+STEP3_PUB_END=$(date +%s)
+STEP3_PUB_DUR=$((STEP3_PUB_END - STEP3_PUB_START))
 
-log "Step 4 complete: Published to GitHub Pages (${STEP4_DUR}s)"
-record_step "Step 4: Publish" "$STEP4_DUR"
+log "Step 3 complete: Published to GitHub Pages (${STEP3_PUB_DUR}s)"
+record_step "Step 3: Publish" "$STEP3_PUB_DUR"
 
 # ── Finalize token report ─────────────────────────────────────────────────────
 
@@ -379,14 +384,8 @@ print(total)
   echo "| Total duration | ${MINS}m $((ELAPSED % 60))s |"
   echo "| Step 1 (Research/Sonnet) | ${STEP1_DUR}s |"
   echo "| Step 2 (Writer/Opus) | ${STEP2_DUR}s |"
-  echo "| Step 3 (Translate/Sonnet) | ${STEP3_DUR}s |"
-  echo "| Step 4 (Publish) | ${STEP4_DUR}s |"
+  echo "| Step 3 (Publish) | ${STEP3_PUB_DUR}s |"
   echo "| English briefing | ${FULL_SIZE:-0} bytes (${FULL_WORDS:-0} words) |"
-  if [[ -f "$WORK_DIR/briefing/daily/${DATE}_full_de.md" ]]; then
-    echo "| German translation | ${DE_SIZE:-0} bytes |"
-  else
-    echo "| German translation | skipped |"
-  fi
   echo "| **Grand total tokens** | **${GRAND_TOTAL}** |"
   echo "| Pipeline finished | $(date '+%H:%M:%S') |"
   echo ""

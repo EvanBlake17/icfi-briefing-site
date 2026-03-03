@@ -15,6 +15,21 @@ Save one intermediate file: `briefing/daily/YYYY-MM-DD_raw.md`
 
 **Keep the raw file under 600 lines.** Prioritize depth on the Perspective, top 5-8 stories, science/health section, world economy data, and coverage gap suggestions. Reduce minor stories to headline + 1-2 sentences. The pseudo-left and arts/culture steps should be compact — headlines, URLs, and 1-2 sentence summaries only.
 
+## CRITICAL: Write the file incrementally
+
+**DO NOT accumulate all material and write once at the end.** This causes context exhaustion and file-write failures.
+
+You MUST write the output file in stages:
+
+1. **After Steps 1-2** (prior briefing review): Write the initial file with the header and Prior Briefing Summary section. Use placeholder sections for the rest.
+2. **After Steps 3-5** (bourgeois press + WSWS + overlap tags): Read the file, replace the placeholder with actual content for these sections, and write the updated file.
+3. **After Steps 6-7** (science/health + world economy): Read the file, add these sections, write the updated file.
+4. **After Steps 8-10** (pseudo-left + arts/culture + coverage gaps): Read the file, add these final sections, write the updated file.
+
+Each write uses the Write tool to overwrite the full file with all content gathered so far. This ensures that even if you run out of context or time, a partial file exists for the writer agent to work with.
+
+**A partial raw file is infinitely better than no raw file.** The writer agent can work with incomplete material.
+
 ## Workflow
 
 ### Step 1: Identify the 24-hour window
@@ -23,7 +38,9 @@ The briefing covers the **past 24 hours only**. If the exact cutoff can't be det
 
 ### Step 2: Review prior briefings for context
 
-Scan the most recent 3 briefings in `briefing/daily/` (if available). Note what has already been covered so the writer agent can avoid repetition. Include a brief summary at the top of the raw file.
+Scan the most recent 3 briefings in `briefing/daily/` (if available). Note what has already been covered so the writer agent can avoid repetition.
+
+**>>> WRITE CHECKPOINT 1: Write the initial file now** with the header (`# Briefing Raw Material — [Date]`) and Prior Briefing Summary. Include empty section headers for all remaining sections so the file structure is in place.
 
 ### Step 3: Gather international press coverage FIRST
 
@@ -75,6 +92,8 @@ For each major bourgeois press story, note whether the WSWS published on the sam
 
 **Important:** The top stories list is determined by Step 3 (bourgeois press coverage). If the WSWS also covered a top story, the WSWS article becomes an additional source — but a story should NEVER be in "Top stories" if it is only covered by a single WSWS article with no corresponding bourgeois press coverage. Those stories belong exclusively in the WSWS coverage section.
 
+**>>> WRITE CHECKPOINT 2: Read the current file and update it now** with the Bourgeois Press and WSWS Articles sections filled in (replacing placeholders). Write the full updated file.
+
 ### Step 6: Gather science, technology, and public health material
 
 This is a dedicated research step — do not skip it. The briefing includes a ~500-word science/tech/health section.
@@ -107,6 +126,8 @@ Collect key financial and economic data from the past 24 hours. This feeds a ded
 - **Trade:** Tariff actions, sanctions developments, trade deal announcements
 
 For each item, collect: the data point (specific number/percentage), the source, and a 1-sentence note on significance. Keep this section compact — raw data, not analysis.
+
+**>>> WRITE CHECKPOINT 3: Read the current file and update it now** with the Science/Health and World Economy sections filled in. Write the full updated file.
 
 ### Step 8: Gather pseudo-left press material
 
@@ -178,6 +199,8 @@ Identify at least 5 significant stories from the past 24 hours that the WSWS did
 - Significant court rulings or legislative actions
 
 **List these in order of priority** (most urgent/significant first). The writer agent will present them as actionable suggestions to the editorial board.
+
+**>>> WRITE CHECKPOINT 4 (final): Read the current file and update it now** with the Pseudo-left, Arts/Culture, and Coverage Gap sections filled in. Write the final complete file. Verify the file exists and has all sections.
 
 ## Output Format
 
