@@ -251,23 +251,66 @@ STEP1_OUTPUT="$(cat "$STEP1_OUTFILE" 2>/dev/null || echo "{}")"
 cat "$STEP1_STDERR" >> "$LOGFILE"
 rm -f "$STEP1_OUTFILE" "$STEP1_STDERR"
 
-STEP1_END=$(date +%s)
-STEP1_DUR=$((STEP1_END - STEP1_START))
-
 # Check for the output file — the definitive success signal.
 # The CLI may exit non-zero due to warnings even when the file is created.
 # Thanks to incremental writing, even a timed-out agent may have produced a partial file.
 if [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_raw.md" ]]; then
-  die "Research agent failed (exit code $STEP1_EXIT): ${DATE}_raw.md was not created"
+  log "WARNING: Research agent failed (exit code $STEP1_EXIT) — no raw file created. Attempting fallback..."
+
+  # ── Fallback: stripped-down research pass ──────────────────────────────────
+  # If the full research agent fails, run a minimal pass that only gathers
+  # the most essential material: top news stories, WSWS articles, and market data.
+  # This produces a smaller raw file but is far more likely to succeed.
+  log "Step 1b/3: Running fallback research (essential sections only)..."
+  STEP1B_OUTFILE="$(mktemp /tmp/briefing-s1b-XXXXXX)"
+  STEP1B_STDERR="$(mktemp /tmp/briefing-s1b-err-XXXXXX)"
+
+  "$CLAUDE" -p \
+    "Today is $DATE_HUMAN. This is a FALLBACK research pass — keep it fast and focused. Gather ONLY the essential material for today's ($DATE) morning briefing and write it to $WORK_DIR/briefing/daily/${DATE}_raw.md. Do these 4 things ONLY: (1) Search for the top 8 world news stories from the past 24 hours — for each, record headline, 2-3 sentence summary, source URL, and publication name. (2) Check https://www.wsws.org/en/archive/recent for WSWS articles published in the past 24 hours — record title, author, URL, and 2-3 sentence summary for each. (3) Get market data: US stock indices, gold, oil, Bitcoin prices and percentage changes. (4) Write the file IMMEDIATELY with whatever you have gathered — use the standard section headers (Bourgeois Press, WSWS Articles, World Economy Data) and leave other sections as placeholders. Do NOT research pseudo-left press, arts/culture, or coverage gaps — skip those entirely. Write the file as soon as possible." \
+    --agent briefing-research \
+    --max-turns 30 \
+    --output-format json \
+    --dangerously-skip-permissions \
+    > "$STEP1B_OUTFILE" 2> "$STEP1B_STDERR" &
+  STEP1B_PID=$!
+
+  # 30-minute timeout for fallback (much shorter since it does less work)
+  ( sleep 1800
+    if kill -0 "$STEP1B_PID" 2>/dev/null; then
+      log "WARNING: Fallback research timed out after 30 minutes — killing PID $STEP1B_PID"
+      kill "$STEP1B_PID" 2>/dev/null
+      sleep 5
+      kill -9 "$STEP1B_PID" 2>/dev/null
+    fi
+  ) &
+  STEP1B_WATCHDOG=$!
+
+  wait "$STEP1B_PID" 2>/dev/null ; STEP1B_EXIT=$?
+  kill "$STEP1B_WATCHDOG" 2>/dev/null || true
+  wait "$STEP1B_WATCHDOG" 2>/dev/null || true
+
+  cat "$STEP1B_STDERR" >> "$LOGFILE"
+  STEP1_OUTPUT="$(cat "$STEP1B_OUTFILE" 2>/dev/null || echo "{}")"
+  rm -f "$STEP1B_OUTFILE" "$STEP1B_STDERR"
+
+  if [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_raw.md" ]]; then
+    die "Both research attempts failed — ${DATE}_raw.md was not created"
+  fi
+  log "Fallback research succeeded — continuing with partial raw material"
 fi
+
 if [[ $STEP1_EXIT -ne 0 ]]; then
   log "WARNING: Research agent exited with code $STEP1_EXIT but output file was created — continuing"
 fi
-# Sanity check: file should have at least 50 lines to be useful
+# Sanity check: file should have at least 20 lines to be useful
 RAW_LINE_COUNT="$(wc -l < "$WORK_DIR/briefing/daily/${DATE}_raw.md" | tr -d ' ')"
-if [[ "$RAW_LINE_COUNT" -lt 50 ]]; then
+if [[ "$RAW_LINE_COUNT" -lt 20 ]]; then
   log "WARNING: Raw file has only $RAW_LINE_COUNT lines — may be incomplete but proceeding"
 fi
+
+# Measure total Step 1 time (includes fallback if it ran)
+STEP1_END=$(date +%s)
+STEP1_DUR=$((STEP1_END - STEP1_START))
 
 RAW_SIZE="$(wc -c < "$WORK_DIR/briefing/daily/${DATE}_raw.md")"
 RAW_LINES="$(wc -l < "$WORK_DIR/briefing/daily/${DATE}_raw.md" | tr -d ' ')"
