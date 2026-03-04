@@ -98,8 +98,7 @@ Translate the following English morning briefing into fluent, natural German. Ru
 6. Use formal German (Sie)
 7. Maintain exact Markdown structure (##, ###, ---, bullets, bold)
 8. Translate 'Sources' to 'Quellen' in source-links blocks
-9. Translate 'What we're covering today' → 'Was wir heute behandeln'
-10. Translate 'What the WSWS should cover today' → 'Was die WSWS heute abdecken sollte'
+9. Translate 'What the WSWS should cover today' → 'Was die WSWS heute abdecken sollte'
 11. Output ONLY the translated Markdown — no commentary, no notes, no preamble
 
 RULES_EOF

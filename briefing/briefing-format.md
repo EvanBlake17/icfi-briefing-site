@@ -4,33 +4,7 @@ This document defines the required format for morning briefings. The briefing-wr
 
 ---
 
-## 1. Top summary section
-
-Every briefing MUST begin with a summary section before the first `---` horizontal rule. This section gives readers a quick overview of the day's most important developments.
-
-**Format:**
-
-```markdown
-## What we're covering today
-
-- **Topic label:** One to two sentence summary of the key development. Keep it concise and informative.
-- **Topic label:** Another concise summary.
-- **Topic label:** Another concise summary.
-
----
-```
-
-**Rules:**
-- Use a bulleted list (not numbered)
-- Each bullet starts with a **bold topic label** followed by a colon
-- Summaries should be 1-2 sentences max — just enough to convey the key development
-- Include 4-8 bullets covering the most significant stories
-- The topic labels should be short (1-3 words): e.g., "Immigration," "Public health," "Iran," "Labor"
-- This section must end with a `---` horizontal rule before the main content begins
-
----
-
-## 2. Heading case
+## 1. Heading case
 
 All headings (h2 and h3) MUST use **sentence case**, not title case.
 
@@ -55,7 +29,7 @@ All headings (h2 and h3) MUST use **sentence case**, not title case.
 
 ---
 
-## 3. Source links
+## 2. Source links
 
 Every topic section (h3) in the main briefing body MUST end with a source attribution block. This tells readers where the information came from and lets them click through to the original reporting.
 
@@ -97,7 +71,7 @@ Every topic section (h3) in the main briefing body MUST end with a source attrib
 
 ---
 
-## 4. Section summary bullets
+## 3. Section summary bullets
 
 Every major section (Top stories, International developments, World economy, United States, Science/health, Pseudo-left press review) MUST open with a bulleted quick-scan summary listing each item in that section. These let ICFI leaders scan the entire briefing in under two minutes.
 
@@ -116,11 +90,11 @@ Every major section (Top stories, International developments, World economy, Uni
 - The text after the `—` dash must provide the **most critical fact or data point** from the story — not a restatement of what is already obvious from the headline
 - Aim for 1-2 sentences per bullet: enough to convey why this story matters without reading the full item
 - These bullets should add value beyond the headline — a key number, a telling detail, a political implication
-- The "What we're covering today" section at the very top of the briefing remains unchanged (it covers the whole briefing); section summary bullets cover individual sections
+- Section summary bullets cover individual sections and serve as the primary quick-scan mechanism for the entire briefing
 
 ---
 
-## 5. Editorial policy for all news sections
+## 4. Editorial policy for all news sections
 
 The following policy applies to **every news section** — Top stories, International developments, World economy, United States, and Science, technology, and public health. The ONLY section where WSWS coverage drives story selection is "WSWS coverage — last 24 hours."
 
@@ -138,7 +112,7 @@ The following policy applies to **every news section** — Top stories, Internat
 
 ---
 
-## 6. World economy section
+## 5. World economy section
 
 This is a dedicated ~400-word section covering major economic and financial developments from the past 24 hours. It should appear **after International developments and before United States**.
 
@@ -158,7 +132,7 @@ This is a dedicated ~400-word section covering major economic and financial deve
 
 ---
 
-## 7. Science, technology, and public health section
+## 6. Science, technology, and public health section
 
 This is a dedicated ~500-word section covering developments in science, technology, and public health from the past 24 hours. It should be substantive and information-dense.
 
@@ -174,7 +148,7 @@ This is a dedicated ~500-word section covering developments in science, technolo
 
 ---
 
-## 8. Arts and culture section
+## 7. Arts and culture section
 
 This is a dedicated ~500-word section covering significant developments in arts and culture from the past 24 hours. It appears **after Science, technology, and public health**.
 
@@ -194,7 +168,7 @@ This is a dedicated ~500-word section covering significant developments in arts 
 
 ---
 
-## 9. Pseudo-left press review
+## 8. Pseudo-left press review
 
 This is a dedicated ~750-word section reviewing the press of the major pseudo-left tendencies that the WSWS polemicizes against. It appears **after WSWS coverage — last 24 hours** and **before What the WSWS should cover today**.
 
@@ -245,7 +219,7 @@ This is a dedicated ~750-word section reviewing the press of the major pseudo-le
 
 ---
 
-## 10. Coverage suggestions section
+## 9. Coverage suggestions section
 
 Every briefing MUST end with a "What the WSWS should cover today" section. This identifies critical world events from the past 24 hours that the WSWS did NOT write about, and which the editorial board should consider assigning.
 
@@ -285,20 +259,11 @@ Every briefing MUST end with a "What the WSWS should cover today" section. This 
 
 ---
 
-## 11. Overall briefing structure
+## 10. Overall briefing structure
 
 The complete structure of a briefing should be:
 
 ```markdown
-## What we're covering today
-
-- **Topic:** Summary sentence.
-- **Topic:** Summary sentence.
-- **Topic:** Summary sentence.
-[4-8 bullets total]
-
----
-
 ## Top stories
 
 - [Headline](#anchor) — most critical fact from the story
@@ -408,10 +373,9 @@ Socialist Alternative, SWP, IMT, others as relevant.]
 
 ---
 
-## 12. Section heading (h2) naming
+## 11. Section heading (h2) naming
 
 Section headings (h2) should be concise, descriptive, and in sentence case:
-- `## What we're covering today`
 - `## Top stories`
 - `## International developments`
 - `## World economy`
@@ -424,7 +388,7 @@ Section headings (h2) should be concise, descriptive, and in sentence case:
 
 ---
 
-## 13. Research agent: source URL requirements
+## 12. Research agent: source URL requirements
 
 The briefing-research agent MUST preserve full source URLs for every article, report, or data point gathered. Each entry in the raw material should include:
 - The full URL of the source article

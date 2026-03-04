@@ -83,14 +83,6 @@ Then do a general pass:
 ## Briefing Structure
 
 ```markdown
-## What we're covering today
-
-- **Topic:** Summary sentence.
-- **Topic:** Summary sentence.
-[4-8 bullets — see format guide for details]
-
----
-
 ## Top stories
 
 - [Headline](#anchor) — the most critical fact, not a restatement
