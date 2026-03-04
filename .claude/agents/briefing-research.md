@@ -74,15 +74,18 @@ Scan the most recent 3 briefings in `briefing/daily/` (if available). Note what 
 
 Use **https://www.wsws.org/en/archive/recent** to identify ALL articles published in the past 24 hours.
 
+**Identify today's Perspective FIRST.** Check **https://www.wsws.org/en/topics/site_area/perspectives** to find the most recent Perspective. The Perspective used in the briefing **MUST be dated today** (the briefing date). Do NOT use a Perspective from a previous day — even if it is the most prominent or analytically rich piece available. If no Perspective was published today, note this explicitly so the writer agent can handle it.
+
 For each article, collect:
 - Title (sentence case), author
 - Article type (news, perspective, polemic, letters, obituary, This Week in History, etc.)
 - Full URL
+- **Publication date** (verify this matches the briefing date for the Perspective)
 - The article's main argument/thesis (2-3 sentences)
 - Key data points, statistics, and quotations cited
 - Political conclusions drawn
 
-**For the Perspective:** Collect a detailed summary (600-800 words) including all major arguments, key quotations, data points, and political conclusions. The writer agent needs this to draft a Perspective contribution.
+**For the Perspective:** Collect a detailed summary (600-800 words) including all major arguments, key quotations, data points, and political conclusions. The writer agent needs this to draft a Perspective contribution. **Double-check that the article URL contains today's date** (e.g., `/2026/03/04/` for a March 4 briefing).
 
 **For This Week in History:** Collect full details on each historical event covered.
 

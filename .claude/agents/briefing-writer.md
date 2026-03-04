@@ -52,6 +52,8 @@ For each story in Top Stories, International developments, United States, World 
 2. If a story's ONLY source is the WSWS, it does NOT belong in any news section — **move it to the WSWS coverage section**
 3. This is a hard rule with no exceptions: news sections must reflect objectively significant world events as evidenced by bourgeois press coverage
 
+**Perspective date check:** Verify the Perspective article listed in the "WSWS coverage" section is from **today's date** (the briefing date). Check the article URL — it must contain today's date path (e.g., `/2026/03/04/`). If the raw material provided a Perspective from a previous day, check https://www.wsws.org/en/topics/site_area/perspectives to find today's actual Perspective before writing the section.
+
 ### Step 5: Mechanical deduplication check
 
 **This step is mandatory.** Before saving, perform this specific check:
@@ -203,6 +205,12 @@ politics. Include source links.]
 
 **Perspective published:** [Title] by [Author] — read in full
 on wsws.org
+
+[IMPORTANT: The Perspective MUST be from today's date. If the raw
+material lists a Perspective from a previous day, check
+https://www.wsws.org/en/topics/site_area/perspectives to find
+today's actual Perspective. If none was published today, note
+"No Perspective published today" instead.]
 
 [For each remaining article:]
 
