@@ -43,7 +43,16 @@ Follow the structure below. Pay special attention to:
 - The coverage suggestions section (at least 5 items)
 - Source link format (must include `target="_blank" rel="noopener"`)
 
-### Step 4: Mechanical deduplication check
+### Step 4: Source validation check
+
+**This step is mandatory.** Before saving, verify every story placement:
+
+For each story in Top Stories, International developments, United States, World economy, and Science/health:
+1. Check that the source-links div includes **at least one bourgeois press source** (wire service, newspaper, journal)
+2. If a story's ONLY source is the WSWS, it does NOT belong in any news section — **move it to the WSWS coverage section**
+3. This is a hard rule with no exceptions: news sections must reflect objectively significant world events as evidenced by bourgeois press coverage
+
+### Step 5: Mechanical deduplication check
 
 **This step is mandatory.** Before saving, perform this specific check:
 

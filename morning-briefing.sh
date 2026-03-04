@@ -174,12 +174,21 @@ STEP1_START=$(date +%s)
 # agent execution (discovered in commit 17c54c6, Feb 26). Agent output streams
 # to the log file; success is determined by whether the raw file exists.
 "$CLAUDE" -p \
-  "Today is $DATE_HUMAN. Gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to $WORK_DIR/briefing/daily/${DATE}_raw.md following the output format in your instructions. CRITICAL: Write the file INCREMENTALLY as instructed — write after Steps 1-2, update after Steps 3-5, update after Steps 6-7, and final update after Steps 8-10. Do NOT accumulate everything and write once at the end. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Gather world economy data — stock indices, gold/silver/oil prices, crypto, central bank decisions, major economic data releases. (5) Scan the pseudo-left press (Jacobin, Left Voice, PSL/Liberation News, Socialist Alternative, SWP UK, Socialist Appeal/RCP IMT) — collect 2-3 significant article headlines, URLs, and 1-2 sentence political summaries per tendency. (6) Gather arts and culture material — major film, literary, theater, music developments from the past 24 hours. (7) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL." \
+  "Today is $DATE_HUMAN. Gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to $WORK_DIR/briefing/daily/${DATE}_raw.md following the output format in your instructions. CRITICAL: Write the file INCREMENTALLY as instructed — write after Steps 1-2, update after Steps 3-5, update after Steps 6-7, and final update after Steps 8-10. Do NOT accumulate everything and write once at the end. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Gather world economy data — stock indices, gold/silver/oil prices, crypto, central bank decisions, major economic data releases. (5) Scan the pseudo-left press (Jacobin, Left Voice, PSL/Liberation News, Socialist Alternative, SWP UK, Socialist Appeal/RCP IMT) — collect 2-3 significant article headlines, URLs, and 1-2 sentence political summaries per tendency. (6) Gather arts and culture material — major film, literary, theater, music developments from the past 24 hours. (7) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL. (8) ALL sources must be from the past 48 hours — do NOT cite articles that are weeks or months old even if they appear in search results. (9) Every story in the Bourgeois Press section must have at least one non-WSWS source; WSWS-only stories go exclusively in the WSWS Articles section." \
   --agent briefing-research \
   --max-turns 80 \
   --dangerously-skip-permissions \
   >> "$LOGFILE" 2>&1 &
 STEP1_PID=$!
+
+# Early-warning notification: if no raw file after 45 minutes, alert Evan.
+# This fires independently of the timeout — it doesn't kill the agent, just notifies.
+( sleep 2700
+  if kill -0 "$STEP1_PID" 2>/dev/null && [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_raw.md" ]]; then
+    log "WARNING: Research agent has been running 45 minutes with no raw file yet"
+    osascript -e "display notification \"Research agent running 45 min — no raw file yet. May need manual intervention.\" with title \"⚠️ Briefing Pipeline\"" 2>/dev/null || true
+  fi
+) &
 
 # 90-minute timeout — kills the agent if it hangs
 ( sleep 5400

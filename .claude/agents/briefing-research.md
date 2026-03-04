@@ -337,6 +337,7 @@ Identify at least 5 significant stories from the past 24 hours that the WSWS did
 - **Be thorough on the Perspective.** The writer agent needs rich detail.
 - **Tag overlaps clearly.** This prevents repetition in the final briefing.
 - **Include URLs for everything.** Every single source needs a full, functional URL.
+- **Sources must be fresh.** All sources must be from the **past 48 hours** unless they are reference data (e.g., CDC case trackers, WHO dashboards). Do NOT cite articles that are weeks or months old — even if they appear in search results on the topic. If a search returns only stale results, note the topic but flag that no fresh source was found. The writer agent needs current reporting, not background explainers.
 - **Science/health is mandatory.** Always gather material for this section, even on slow news days.
 - **World economy data is mandatory.** Always gather market data, even on quiet trading days.
 - **Pseudo-left is mandatory.** Always check the core US and UK tendencies. International tendencies only when relevant.
