@@ -2,9 +2,9 @@
 # morning-briefing.sh — Automated daily briefing pipeline
 #
 # Runs three steps in sequence:
-#   1. briefing-research agent → gathers raw material from WSWS + bourgeois press
-#   2. briefing-writer agent   → synthesizes the final briefing
-#   3. publish.sh              → converts to HTML and pushes to GitHub Pages
+#   1. Parallel research  → 6 focused claude -p calls gather material concurrently
+#   2. briefing-writer agent → synthesizes the final briefing
+#   3. publish.sh            → converts to HTML and pushes to GitHub Pages
 #
 # Step timing and output sizes are tracked and saved to a report.
 #
@@ -164,104 +164,345 @@ log "Preflight: Auth OK"
   echo "---"
 } > "$TOKEN_REPORT"
 
-# ── Step 1: Research ──────────────────────────────────────────────────────────
 
-log "Step 1/3: Running briefing-research agent..."
+# ── Step 1: Parallel research ────────────────────────────────────────────────
+#
+# Instead of one monolithic research agent (which kept stalling after writing
+# only a skeleton file), we run multiple focused claude -p calls in parallel.
+# Each gathers one section of the raw material. The shell script stitches them.
+#
+# This is more reliable because:
+#   - Each call is simple and focused (3-10 max turns vs 80)
+#   - If one section fails, the others still succeed
+#   - No complex checkpoint system — each call outputs directly to stdout
+#   - Shell handles orchestration (the reliable part)
+#   - Total time: ~5-10 min instead of 60-90 min
+
+log "Step 1/3: Gathering research material (parallel sub-steps)..."
 STEP1_START=$(date +%s)
 
-# Use --agent to run AS the briefing-research agent directly.
-# IMPORTANT: Do NOT use --output-format json with --agent — it breaks multi-turn
-# agent execution (discovered in commit 17c54c6, Feb 26). Agent output streams
-# to the log file; success is determined by whether the raw file exists.
-"$CLAUDE" -p \
-  "Today is $DATE_HUMAN. Gather all raw news material, WSWS articles, and source data for today's ($DATE) morning briefing. Save the structured raw material to $WORK_DIR/briefing/daily/${DATE}_raw.md following the output format in your instructions. CRITICAL: Write the file INCREMENTALLY as instructed — write after Steps 1-2, update after Steps 3-5, update after Steps 6-7, and final update after Steps 8-10. Do NOT accumulate everything and write once at the end. IMPORTANT: (1) For every article and data point gathered, preserve the full source URL, publication name, article headline, and publication date — these are required for functional hyperlinks in the final briefing. (2) Gather bourgeois press FIRST to establish the objectively most important world events — top stories are determined by real-world significance, not WSWS coverage. (3) Gather dedicated science/technology/public health material (major studies, COVID/flu data, outbreak updates). (4) Gather world economy data — stock indices, gold/silver/oil prices, crypto, central bank decisions, major economic data releases. (5) Scan the pseudo-left press (Jacobin, Left Voice, PSL/Liberation News, Socialist Alternative, SWP UK, Socialist Appeal/RCP IMT) — collect 2-3 significant article headlines, URLs, and 1-2 sentence political summaries per tendency. (6) Gather arts and culture material — major film, literary, theater, music developments from the past 24 hours. (7) Provide at least 5 coverage gap suggestions in priority order, each with a potential headline, description, and source URL. (8) ALL sources must be from the past 48 hours — do NOT cite articles that are weeks or months old even if they appear in search results. (9) Every story in the Bourgeois Press section must have at least one non-WSWS source; WSWS-only stories go exclusively in the WSWS Articles section." \
-  --agent briefing-research \
-  --max-turns 80 \
-  --dangerously-skip-permissions \
-  >> "$LOGFILE" 2>&1 &
-STEP1_PID=$!
+RESEARCH_TMP=$(mktemp -d /tmp/briefing-research-XXXXXXXX)
+RAW_FILE="$WORK_DIR/briefing/daily/${DATE}_raw.md"
 
-# Early-warning notification: if no raw file after 45 minutes, alert Evan.
-# This fires independently of the timeout — it doesn't kill the agent, just notifies.
-( sleep 2700
-  if kill -0 "$STEP1_PID" 2>/dev/null && [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_raw.md" ]]; then
-    log "WARNING: Research agent has been running 45 minutes with no raw file yet"
-    osascript -e "display notification \"Research agent running 45 min — no raw file yet. May need manual intervention.\" with title \"⚠️ Briefing Pipeline\"" 2>/dev/null || true
-  fi
-) &
+# ── 1a: Prior briefing context (shell only, no Claude) ──────────────────────
 
-# 90-minute timeout — kills the agent if it hangs
-( sleep 5400
-  if kill -0 "$STEP1_PID" 2>/dev/null; then
-    log "WARNING: Research agent timed out after 90 minutes — killing PID $STEP1_PID"
-    kill "$STEP1_PID" 2>/dev/null
-    sleep 5
-    kill -9 "$STEP1_PID" 2>/dev/null
-  fi
-) &
-STEP1_WATCHDOG=$!
-
-wait "$STEP1_PID" 2>/dev/null ; STEP1_EXIT=$?
-kill "$STEP1_WATCHDOG" 2>/dev/null || true
-wait "$STEP1_WATCHDOG" 2>/dev/null || true
-
-# Check for the output file — the definitive success signal.
-# Thanks to incremental writing, even a timed-out agent may have produced a partial file.
-if [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_raw.md" ]]; then
-  log "WARNING: Research agent failed (exit code $STEP1_EXIT) — no raw file created. Attempting fallback..."
-
-  # ── Fallback: stripped-down research pass ──────────────────────────────────
-  # If the full research agent fails, run a minimal pass that only gathers
-  # the most essential material: top news stories, WSWS articles, and market data.
-  log "Step 1b/3: Running fallback research (essential sections only)..."
-
-  "$CLAUDE" -p \
-    "Today is $DATE_HUMAN. This is a FALLBACK research pass — keep it fast and focused. Gather ONLY the essential material for today's ($DATE) morning briefing and write it to $WORK_DIR/briefing/daily/${DATE}_raw.md. Do these 4 things ONLY: (1) Search for the top 8 world news stories from the past 24 hours — for each, record headline, 2-3 sentence summary, source URL, and publication name. (2) Check https://www.wsws.org/en/archive/recent for WSWS articles published in the past 24 hours — record title, author, URL, and 2-3 sentence summary for each. (3) Get market data: US stock indices, gold, oil, Bitcoin prices and percentage changes. (4) Write the file IMMEDIATELY with whatever you have gathered — use the standard section headers (Bourgeois Press, WSWS Articles, World Economy Data) and leave other sections as placeholders. Do NOT research pseudo-left press, arts/culture, or coverage gaps — skip those entirely. Write the file as soon as possible." \
-    --agent briefing-research \
-    --max-turns 30 \
-    --dangerously-skip-permissions \
-    >> "$LOGFILE" 2>&1 &
-  STEP1B_PID=$!
-
-  # 30-minute timeout for fallback
-  ( sleep 1800
-    if kill -0 "$STEP1B_PID" 2>/dev/null; then
-      log "WARNING: Fallback research timed out after 30 minutes — killing PID $STEP1B_PID"
-      kill "$STEP1B_PID" 2>/dev/null
-      sleep 5
-      kill -9 "$STEP1B_PID" 2>/dev/null
+log "  1a: Extracting prior briefing context..."
+{
+  echo "# Briefing Raw Material — $DATE_HUMAN"
+  echo ""
+  echo "## Prior Briefing Summary"
+  echo ""
+  for f in $(ls -t "$WORK_DIR/briefing/daily/"*_full.md 2>/dev/null | grep -v "$DATE" | head -3); do
+    briefing_date=$(basename "$f" | sed 's/_full\.md//')
+    stories=$(head -40 "$f" | grep '^### ' | sed 's/^### [0-9]*\. /- /' | head -6)
+    if [[ -n "$stories" ]]; then
+      echo "**$briefing_date:**"
+      echo "$stories"
+      echo ""
     fi
-  ) &
-  STEP1B_WATCHDOG=$!
+  done
+} > "$RESEARCH_TMP/00-header.md"
+log "  1a: Done"
 
-  wait "$STEP1B_PID" 2>/dev/null ; STEP1B_EXIT=$?
-  kill "$STEP1B_WATCHDOG" 2>/dev/null || true
-  wait "$STEP1B_WATCHDOG" 2>/dev/null || true
+# ── Helper: launch a focused research call ───────────────────────────────────
 
-  if [[ ! -f "$WORK_DIR/briefing/daily/${DATE}_raw.md" ]]; then
-    die "Both research attempts failed — ${DATE}_raw.md was not created"
+research_call() {
+  local name="$1" max_turns="$2" outfile="$3"
+  shift 3
+  local prompt="$*"
+
+  log "  $name: Starting..."
+  # Run from /tmp to avoid loading project CLAUDE.md and agents (saves tokens).
+  ( cd /tmp && "$CLAUDE" -p "$prompt" \
+      --max-turns "$max_turns" \
+      --model sonnet \
+      --dangerously-skip-permissions \
+  ) > "$outfile" 2>> "$LOGFILE" &
+  echo $!
+}
+
+# ── 1b: Top news stories ────────────────────────────────────────────────────
+
+PID_NEWS=$(research_call "1b-news" 10 "$RESEARCH_TMP/01-news.md" \
+"Today is $DATE_HUMAN. Search for the 8-10 most significant world news stories from the past 24 hours. Use WebSearch to find stories, then use WebFetch on the 2-3 most important articles for detail.
+
+For each story, output in this exact format:
+
+### [Number]. [Headline in sentence case]
+- **Sources:** [Publication Name](URL), [Publication Name](URL)
+- **Key facts:** [3-5 bullet points with specific data: death tolls, vote counts, percentages, direct quotes from officials with attribution]
+- **WSWS overlap:** [Yes/No — note if WSWS likely covered this topic]
+
+Focus on: wars/conflicts, major political developments, economic crises, international diplomacy, significant US domestic events. Prioritize by objective world significance — not US-centric. Include full source URLs for every story. ALL sources must be from the past 48 hours.
+
+Also identify 5+ significant stories a socialist publication should cover. For each gap:
+### Gap [Number]: [Potential headline]
+- **Description:** [2-3 sentences on the event]
+- **Best source:** [Publication — Article headline](URL)
+
+Print your entire response directly — do NOT use the Write tool or write any files.")
+
+# ── 1c: WSWS articles ───────────────────────────────────────────────────────
+
+PID_WSWS=$(research_call "1c-wsws" 10 "$RESEARCH_TMP/02-wsws.md" \
+"Today is $DATE_HUMAN. Gather all WSWS articles published today.
+
+STEP 1: Fetch https://www.wsws.org/en/topics/site_area/perspectives to find today's Perspective. The Perspective MUST be dated today ($DATE). Verify the article URL contains /$DATE/ (with slashes replaced as in the URL pattern). If no Perspective was published today, note this explicitly.
+
+STEP 2: Fetch https://www.wsws.org/en/archive/recent to list ALL articles published today ($DATE) or yesterday.
+
+For the Perspective, fetch the full article and write a detailed summary:
+### Editorial/Perspective: \"[Title]\" — [Author]
+- URL: [full URL]
+- Date: [confirm today's date]
+[600-800 word summary: all major arguments, key quotations with attribution, data points, political conclusions]
+- Overlaps with bourgeois press: [Yes — which topic / No]
+
+For each other article:
+### [Title] — [Author]
+- URL: [full URL]
+- Type: [news/polemic/letters/obituary/This Week in History]
+- Summary: [2-3 sentences: main argument, key data, political conclusion]
+- Overlaps with bourgeois press: [Yes — which / No]
+
+Print your entire response directly — do NOT use the Write tool or write any files.")
+
+# ── 1d: Science and health ──────────────────────────────────────────────────
+
+PID_SCIENCE=$(research_call "1d-science" 5 "$RESEARCH_TMP/03-science.md" \
+"Today is $DATE_HUMAN. Search for science, technology, and public health news from the past 48 hours. Check for:
+- US measles cases (latest CDC data from cdc.gov/measles/data-research/)
+- H5N1 bird flu updates
+- COVID-19 data if significant
+- Major studies in Nature, Science, Lancet, NEJM, JAMA
+- Significant tech/AI policy developments
+
+For each item:
+### [Headline]
+- **Source:** [Publication](URL)
+- **Key finding:** [1-2 sentences with specific numbers]
+- **Significance:** [1 sentence]
+
+Include at least 3-5 items with full URLs. Print directly — do NOT write files.")
+
+# ── 1e: World economy and markets ───────────────────────────────────────────
+
+PID_ECONOMY=$(research_call "1e-economy" 5 "$RESEARCH_TMP/04-economy.md" \
+"Today is $DATE_HUMAN. Get the latest market data and economic news. I need specific numbers:
+
+### Markets (most recent close)
+- Dow Jones: [points] [+/- points] ([% change])
+- S&P 500: [points] [+/- points] ([% change])
+- Nasdaq: [points] [+/- points] ([% change])
+- Key European indices (FTSE, DAX): [% changes]
+- Key Asian indices (Nikkei, Shanghai, Hang Seng, KOSPI): [% changes and key drivers]
+
+### Commodities
+- Oil WTI: \$[price]/bbl [+/- %]
+- Oil Brent: \$[price]/bbl [+/- %]
+- Gold: \$[price]/oz [+/- %]
+
+### Crypto
+- Bitcoin: \$[price] [+/- %]
+- Ethereum: \$[price] [+/- %]
+
+### Economic data releases (past 24 hours)
+[Any GDP, jobs, inflation, PMI, central bank decisions with specific numbers]
+
+### Corporate/trade developments
+[Major bankruptcies, M&A, tariffs, sanctions]
+
+Include source URLs. Print directly — do NOT write files.")
+
+# ── 1f: Pseudo-left press ───────────────────────────────────────────────────
+
+PID_PSEUDO=$(research_call "1f-pseudoleft" 5 "$RESEARCH_TMP/05-pseudoleft.md" \
+"Today is $DATE_HUMAN. Scan these pseudo-left publications for their 2-3 most notable articles from the past 24 hours. Scan headlines and opening paragraphs only — do not read in depth.
+
+Check: Jacobin (jacobin.com), Left Voice (leftvoice.org), Liberation News/PSL (liberationnews.org), Socialist Alternative (socialistalternative.org), SWP UK (socialistworker.co.uk), Socialist Appeal/RCP (socialist.net or communist.red)
+
+For each tendency:
+### [Tendency name]
+- **\"[Article title]\"** — [URL]
+  - Political line: [1-2 sentence summary of the argument and its class orientation]
+- **\"[Article title]\"** — [URL]
+  - Political line: [1-2 sentence summary]
+
+Note any: support for bourgeois parties, channeling opposition through Democrats/Labour, failure to oppose imperialist war, national-reformist programs, attacks on Trotskyism/ICFI.
+
+Print directly — do NOT write files.")
+
+# ── 1g: Arts and culture ────────────────────────────────────────────────────
+
+PID_ARTS=$(research_call "1g-arts" 3 "$RESEARCH_TMP/06-arts.md" \
+"Today is $DATE_HUMAN. Search for major arts, culture, film, theater, and music news from the past 24 hours. Look for:
+- Major film releases or festival news
+- Notable book publications or literary awards
+- Significant theater/opera developments
+- Deaths of cultural figures
+- Censorship or defunding of arts institutions
+- Cultural developments connected to war or political repression
+
+Output 3-6 items:
+### [Headline]
+- **Source:** [Publication](URL)
+- **Summary:** [1-2 sentences]
+- **Significance:** [1 sentence]
+
+Print directly — do NOT write files.")
+
+# ── Wait for all sub-steps ───────────────────────────────────────────────────
+
+ALL_PIDS="$PID_NEWS $PID_WSWS $PID_SCIENCE $PID_ECONOMY $PID_PSEUDO $PID_ARTS"
+
+# Global 10-minute timeout — kill anything still running
+( sleep 600
+  for pid in $ALL_PIDS; do
+    if kill -0 "$pid" 2>/dev/null; then
+      log "WARNING: Research PID $pid timed out after 10 min — killing"
+      kill "$pid" 2>/dev/null
+      sleep 3
+      kill -9 "$pid" 2>/dev/null
+    fi
+  done
+) &
+RESEARCH_WATCHDOG=$!
+
+wait_step() {
+  local pid="$1" name="$2" outfile="$3"
+  wait "$pid" 2>/dev/null
+  local exit_code=$?
+  local lines=0
+  [[ -f "$outfile" ]] && lines=$(wc -l < "$outfile" | tr -d ' ')
+  if [[ $exit_code -eq 0 && $lines -gt 3 ]]; then
+    log "  $name: OK ($lines lines)"
+  elif [[ $lines -gt 3 ]]; then
+    log "  $name: Warning — exit code $exit_code but has output ($lines lines)"
+  else
+    log "  $name: FAILED (exit $exit_code, $lines lines)"
   fi
-  log "Fallback research succeeded — continuing with partial raw material"
+}
+
+wait_step "$PID_NEWS"    "1b-news"       "$RESEARCH_TMP/01-news.md"
+wait_step "$PID_WSWS"    "1c-wsws"       "$RESEARCH_TMP/02-wsws.md"
+wait_step "$PID_SCIENCE" "1d-science"    "$RESEARCH_TMP/03-science.md"
+wait_step "$PID_ECONOMY" "1e-economy"    "$RESEARCH_TMP/04-economy.md"
+wait_step "$PID_PSEUDO"  "1f-pseudoleft" "$RESEARCH_TMP/05-pseudoleft.md"
+wait_step "$PID_ARTS"    "1g-arts"       "$RESEARCH_TMP/06-arts.md"
+
+kill "$RESEARCH_WATCHDOG" 2>/dev/null
+wait "$RESEARCH_WATCHDOG" 2>/dev/null
+
+# ── Validate critical sections ───────────────────────────────────────────────
+
+NEWS_LINES=0; [[ -f "$RESEARCH_TMP/01-news.md" ]] && NEWS_LINES=$(wc -l < "$RESEARCH_TMP/01-news.md" | tr -d ' ')
+WSWS_LINES=0; [[ -f "$RESEARCH_TMP/02-wsws.md" ]] && WSWS_LINES=$(wc -l < "$RESEARCH_TMP/02-wsws.md" | tr -d ' ')
+
+if [[ "$NEWS_LINES" -lt 5 && "$WSWS_LINES" -lt 5 ]]; then
+  notify "Research failed — both news and WSWS empty. Manual intervention needed."
+  die "Critical research steps failed — both news ($NEWS_LINES lines) and WSWS ($WSWS_LINES lines) sections empty"
 fi
 
-if [[ $STEP1_EXIT -ne 0 ]]; then
-  log "WARNING: Research agent exited with code $STEP1_EXIT but output file was created — continuing"
-fi
-# Sanity check: file should have at least 20 lines to be useful
-RAW_LINE_COUNT="$(wc -l < "$WORK_DIR/briefing/daily/${DATE}_raw.md" | tr -d ' ')"
-if [[ "$RAW_LINE_COUNT" -lt 20 ]]; then
-  log "WARNING: Raw file has only $RAW_LINE_COUNT lines — may be incomplete but proceeding"
-fi
+# ── Stitch sections into raw file ────────────────────────────────────────────
 
-# Measure total Step 1 time (includes fallback if it ran)
+log "  Stitching raw file..."
+{
+  cat "$RESEARCH_TMP/00-header.md"
+
+  echo ""
+  echo "---"
+  echo ""
+  echo "## Bourgeois Press — Top Stories (by objective significance)"
+  echo ""
+  if [[ -s "$RESEARCH_TMP/01-news.md" ]]; then
+    cat "$RESEARCH_TMP/01-news.md"
+  else
+    echo "[Research step failed — no news data gathered]"
+  fi
+
+  echo ""
+  echo "---"
+  echo ""
+  echo "## WSWS Articles (past 24 hours)"
+  echo ""
+  if [[ -s "$RESEARCH_TMP/02-wsws.md" ]]; then
+    cat "$RESEARCH_TMP/02-wsws.md"
+  else
+    echo "[Research step failed — no WSWS data gathered]"
+  fi
+
+  echo ""
+  echo "---"
+  echo ""
+  echo "## Science, Technology, and Public Health"
+  echo ""
+  if [[ -s "$RESEARCH_TMP/03-science.md" ]]; then
+    cat "$RESEARCH_TMP/03-science.md"
+  else
+    echo "[Research step failed — no science data gathered]"
+  fi
+
+  echo ""
+  echo "---"
+  echo ""
+  echo "## World Economy Data"
+  echo ""
+  if [[ -s "$RESEARCH_TMP/04-economy.md" ]]; then
+    cat "$RESEARCH_TMP/04-economy.md"
+  else
+    echo "[Research step failed — no economy data gathered]"
+  fi
+
+  echo ""
+  echo "---"
+  echo ""
+  echo "## Pseudo-left Press (past 24 hours)"
+  echo ""
+  if [[ -s "$RESEARCH_TMP/05-pseudoleft.md" ]]; then
+    cat "$RESEARCH_TMP/05-pseudoleft.md"
+  else
+    echo "[Research step failed — no pseudo-left data gathered]"
+  fi
+
+  echo ""
+  echo "---"
+  echo ""
+  echo "## Arts and Culture (past 24 hours)"
+  echo ""
+  if [[ -s "$RESEARCH_TMP/06-arts.md" ]]; then
+    cat "$RESEARCH_TMP/06-arts.md"
+  else
+    echo "[Research step failed — no arts data gathered]"
+  fi
+
+  echo ""
+  echo "---"
+  echo ""
+  echo "## Coverage Gap Suggestions"
+  echo ""
+  echo "[Coverage gaps are included in the news section above, and will also be identified by the writer agent.]"
+} > "$RAW_FILE"
+
+rm -rf "$RESEARCH_TMP"
+
+# ── Measure and report ───────────────────────────────────────────────────────
+
 STEP1_END=$(date +%s)
 STEP1_DUR=$((STEP1_END - STEP1_START))
 
-RAW_SIZE="$(wc -c < "$WORK_DIR/briefing/daily/${DATE}_raw.md")"
-RAW_LINES="$(wc -l < "$WORK_DIR/briefing/daily/${DATE}_raw.md" | tr -d ' ')"
+RAW_SIZE="$(wc -c < "$RAW_FILE")"
+RAW_LINES="$(wc -l < "$RAW_FILE" | tr -d ' ')"
 log "Step 1 complete: ${DATE}_raw.md created (${RAW_SIZE} bytes, ${RAW_LINES} lines, ${STEP1_DUR}s)"
-record_step "Step 1: Research Agent (Sonnet)" "$STEP1_DUR" "| Model | Claude Sonnet |
-| Output size | ${RAW_SIZE} bytes (${RAW_LINES} lines) |"
+
+if [[ "$RAW_LINES" -lt 50 ]]; then
+  log "WARNING: Raw file has only $RAW_LINES lines — may be incomplete but proceeding"
+  notify "Research produced thin raw file ($RAW_LINES lines). Briefing may be incomplete."
+fi
+
+record_step "Step 1: Parallel Research (Sonnet)" "$STEP1_DUR" "| Model | Claude Sonnet (6 parallel calls) |
+| Output size | ${RAW_SIZE} bytes (${RAW_LINES} lines) |
+| News lines | ${NEWS_LINES} |
+| WSWS lines | ${WSWS_LINES} |"
 
 # ── Step 2: Writer ────────────────────────────────────────────────────────────
 
