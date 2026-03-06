@@ -98,10 +98,10 @@ run_with_timeout() {
     fi
   ) &
   local watchdog_pid=$!
-  wait "$cmd_pid" 2>/dev/null
-  local exit_code=$?
-  kill "$watchdog_pid" 2>/dev/null
-  wait "$watchdog_pid" 2>/dev/null
+  local exit_code=0
+  wait "$cmd_pid" 2>/dev/null || exit_code=$?
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
   return "$exit_code"
 }
 
@@ -211,11 +211,14 @@ research_call() {
   shift 3
   local prompt="$*"
 
-  log "  $name: Starting..."
+  # IMPORTANT: redirect log to stderr (>&2) so it is NOT captured by $()
+  # command substitution.  Only the PID (from echo $!) should go to stdout.
+  log "  $name: Starting..." >&2
   # Run from /tmp to avoid loading project CLAUDE.md and agents (saves tokens).
   ( cd /tmp && "$CLAUDE" -p "$prompt" \
       --max-turns "$max_turns" \
       --model sonnet \
+      --no-session-persistence \
       --dangerously-skip-permissions \
   ) > "$outfile" 2>> "$LOGFILE" &
   echo $!
@@ -370,14 +373,16 @@ RESEARCH_WATCHDOG=$!
 
 wait_step() {
   local pid="$1" name="$2" outfile="$3"
-  wait "$pid" 2>/dev/null
-  local exit_code=$?
+  # Use || true to prevent set -e from killing the script when the background
+  # process exits non-zero.  Capture the real exit code via $? afterward.
+  local exit_code=0
+  wait "$pid" 2>/dev/null || exit_code=$?
   local lines=0
   [[ -f "$outfile" ]] && lines=$(wc -l < "$outfile" | tr -d ' ')
   if [[ $exit_code -eq 0 && $lines -gt 3 ]]; then
     log "  $name: OK ($lines lines)"
   elif [[ $lines -gt 3 ]]; then
-    log "  $name: Warning — exit code $exit_code but has output ($lines lines)"
+    log "  $name: Warning — exit code $exit_code but has output ($lines lines), using it"
   else
     log "  $name: FAILED (exit $exit_code, $lines lines)"
   fi
@@ -390,8 +395,8 @@ wait_step "$PID_ECONOMY" "1e-economy"    "$RESEARCH_TMP/04-economy.md"
 wait_step "$PID_PSEUDO"  "1f-pseudoleft" "$RESEARCH_TMP/05-pseudoleft.md"
 wait_step "$PID_ARTS"    "1g-arts"       "$RESEARCH_TMP/06-arts.md"
 
-kill "$RESEARCH_WATCHDOG" 2>/dev/null
-wait "$RESEARCH_WATCHDOG" 2>/dev/null
+kill "$RESEARCH_WATCHDOG" 2>/dev/null || true
+wait "$RESEARCH_WATCHDOG" 2>/dev/null || true
 
 # ── Validate critical sections ───────────────────────────────────────────────
 
@@ -529,7 +534,8 @@ STEP2_PID=$!
 ) &
 STEP2_WATCHDOG=$!
 
-wait "$STEP2_PID" 2>/dev/null ; STEP2_EXIT=$?
+STEP2_EXIT=0
+wait "$STEP2_PID" 2>/dev/null || STEP2_EXIT=$?
 kill "$STEP2_WATCHDOG" 2>/dev/null || true
 wait "$STEP2_WATCHDOG" 2>/dev/null || true
 
