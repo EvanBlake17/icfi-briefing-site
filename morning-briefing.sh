@@ -206,27 +206,30 @@ log "  1a: Done"
 
 # ── Helper: launch a focused research call ───────────────────────────────────
 
+_RESEARCH_PID=0   # global — set by research_call, read by caller
+
 research_call() {
   local name="$1" max_turns="$2" outfile="$3"
   shift 3
   local prompt="$*"
 
-  # IMPORTANT: redirect log to stderr (>&2) so it is NOT captured by $()
-  # command substitution.  Only the PID (from echo $!) should go to stdout.
-  log "  $name: Starting..." >&2
+  log "  $name: Starting..."
   # Run from /tmp to avoid loading project CLAUDE.md and agents (saves tokens).
+  # IMPORTANT: Do NOT call this function inside $() — background processes
+  # launched in a $() subshell become orphans that the main shell cannot wait on.
+  # Instead, read the PID from the global _RESEARCH_PID after calling.
   ( cd /tmp && "$CLAUDE" -p "$prompt" \
       --max-turns "$max_turns" \
       --model sonnet \
       --no-session-persistence \
       --dangerously-skip-permissions \
   ) > "$outfile" 2>> "$LOGFILE" &
-  echo $!
+  _RESEARCH_PID=$!
 }
 
 # ── 1b: Top news stories ────────────────────────────────────────────────────
 
-PID_NEWS=$(research_call "1b-news" 10 "$RESEARCH_TMP/01-news.md" \
+research_call "1b-news" 10 "$RESEARCH_TMP/01-news.md" \
 "Today is $DATE_HUMAN. Search for the 8-10 most significant world news stories from the past 24 hours. Use WebSearch to find stories, then use WebFetch on the 2-3 most important articles for detail.
 
 For each story, output in this exact format:
@@ -243,11 +246,12 @@ Also identify 5+ significant stories a socialist publication should cover. For e
 - **Description:** [2-3 sentences on the event]
 - **Best source:** [Publication — Article headline](URL)
 
-Print your entire response directly — do NOT use the Write tool or write any files.")
+Print your entire response directly — do NOT use the Write tool or write any files."
+PID_NEWS=$_RESEARCH_PID
 
 # ── 1c: WSWS articles ───────────────────────────────────────────────────────
 
-PID_WSWS=$(research_call "1c-wsws" 10 "$RESEARCH_TMP/02-wsws.md" \
+research_call "1c-wsws" 10 "$RESEARCH_TMP/02-wsws.md" \
 "Today is $DATE_HUMAN. Gather all WSWS articles published today.
 
 STEP 1: Fetch https://www.wsws.org/en/topics/site_area/perspectives to find today's Perspective. The Perspective MUST be dated today ($DATE). Verify the article URL contains /$DATE/ (with slashes replaced as in the URL pattern). If no Perspective was published today, note this explicitly.
@@ -268,11 +272,12 @@ For each other article:
 - Summary: [2-3 sentences: main argument, key data, political conclusion]
 - Overlaps with bourgeois press: [Yes — which / No]
 
-Print your entire response directly — do NOT use the Write tool or write any files.")
+Print your entire response directly — do NOT use the Write tool or write any files."
+PID_WSWS=$_RESEARCH_PID
 
 # ── 1d: Science and health ──────────────────────────────────────────────────
 
-PID_SCIENCE=$(research_call "1d-science" 5 "$RESEARCH_TMP/03-science.md" \
+research_call "1d-science" 5 "$RESEARCH_TMP/03-science.md" \
 "Today is $DATE_HUMAN. Search for science, technology, and public health news from the past 48 hours. Check for:
 - US measles cases (latest CDC data from cdc.gov/measles/data-research/)
 - H5N1 bird flu updates
@@ -286,11 +291,12 @@ For each item:
 - **Key finding:** [1-2 sentences with specific numbers]
 - **Significance:** [1 sentence]
 
-Include at least 3-5 items with full URLs. Print directly — do NOT write files.")
+Include at least 3-5 items with full URLs. Print directly — do NOT write files."
+PID_SCIENCE=$_RESEARCH_PID
 
 # ── 1e: World economy and markets ───────────────────────────────────────────
 
-PID_ECONOMY=$(research_call "1e-economy" 5 "$RESEARCH_TMP/04-economy.md" \
+research_call "1e-economy" 5 "$RESEARCH_TMP/04-economy.md" \
 "Today is $DATE_HUMAN. Get the latest market data and economic news. I need specific numbers:
 
 ### Markets (most recent close)
@@ -315,11 +321,12 @@ PID_ECONOMY=$(research_call "1e-economy" 5 "$RESEARCH_TMP/04-economy.md" \
 ### Corporate/trade developments
 [Major bankruptcies, M&A, tariffs, sanctions]
 
-Include source URLs. Print directly — do NOT write files.")
+Include source URLs. Print directly — do NOT write files."
+PID_ECONOMY=$_RESEARCH_PID
 
 # ── 1f: Pseudo-left press ───────────────────────────────────────────────────
 
-PID_PSEUDO=$(research_call "1f-pseudoleft" 5 "$RESEARCH_TMP/05-pseudoleft.md" \
+research_call "1f-pseudoleft" 5 "$RESEARCH_TMP/05-pseudoleft.md" \
 "Today is $DATE_HUMAN. Scan these pseudo-left publications for their 2-3 most notable articles from the past 24 hours. Scan headlines and opening paragraphs only — do not read in depth.
 
 Check: Jacobin (jacobin.com), Left Voice (leftvoice.org), Liberation News/PSL (liberationnews.org), Socialist Alternative (socialistalternative.org), SWP UK (socialistworker.co.uk), Socialist Appeal/RCP (socialist.net or communist.red)
@@ -333,11 +340,12 @@ For each tendency:
 
 Note any: support for bourgeois parties, channeling opposition through Democrats/Labour, failure to oppose imperialist war, national-reformist programs, attacks on Trotskyism/ICFI.
 
-Print directly — do NOT write files.")
+Print directly — do NOT write files."
+PID_PSEUDO=$_RESEARCH_PID
 
 # ── 1g: Arts and culture ────────────────────────────────────────────────────
 
-PID_ARTS=$(research_call "1g-arts" 3 "$RESEARCH_TMP/06-arts.md" \
+research_call "1g-arts" 3 "$RESEARCH_TMP/06-arts.md" \
 "Today is $DATE_HUMAN. Search for major arts, culture, film, theater, and music news from the past 24 hours. Look for:
 - Major film releases or festival news
 - Notable book publications or literary awards
@@ -352,7 +360,8 @@ Output 3-6 items:
 - **Summary:** [1-2 sentences]
 - **Significance:** [1 sentence]
 
-Print directly — do NOT write files.")
+Print directly — do NOT write files."
+PID_ARTS=$_RESEARCH_PID
 
 # ── Wait for all sub-steps ───────────────────────────────────────────────────
 
