@@ -11,7 +11,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BRIEFING_DIR="$HOME/Projects/editorial/briefing/briefing/daily"
+if [[ -n "${GITHUB_WORKSPACE:-}" ]]; then
+  BRIEFING_DIR="$GITHUB_WORKSPACE/briefing/daily"
+else
+  BRIEFING_DIR="$HOME/Projects/editorial/briefing/briefing/daily"
+fi
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

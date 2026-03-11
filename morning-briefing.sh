@@ -8,25 +8,32 @@
 #
 # Step timing and output sizes are tracked and saved to a report.
 #
-# Designed to run unattended via launchd at 6:00 AM Eastern.
-# Logs to ~/Projects/editorial/briefing/briefing/logs/YYYY-MM-DD.log
-# Token report: ~/Projects/editorial/briefing/briefing/logs/YYYY-MM-DD_tokens.md
+# Designed to run unattended via launchd (macOS) or GitHub Actions (CI).
+# Logs to briefing/logs/YYYY-MM-DD.log
+# Token report: briefing/logs/YYYY-MM-DD_tokens.md
 
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-CLAUDE="$HOME/.local/bin/claude"
-WORK_DIR="$HOME/Projects/editorial/briefing"
-SITE_DIR="$HOME/Projects/editorial/briefing"
+# Detect environment: GitHub Actions (CI) vs local Mac
+if [[ -n "${GITHUB_WORKSPACE:-}" ]]; then
+  CLAUDE="claude"                       # on PATH after CI install step
+  WORK_DIR="$GITHUB_WORKSPACE"
+  SITE_DIR="$GITHUB_WORKSPACE"
+else
+  CLAUDE="$HOME/.local/bin/claude"
+  WORK_DIR="$HOME/Projects/editorial/briefing"
+  SITE_DIR="$HOME/Projects/editorial/briefing"
+  # Ensure PATH includes homebrew (for pandoc, gh) and local bin (for claude)
+  export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+fi
+
 LOGDIR="$WORK_DIR/briefing/logs"
 DATE="$(date +%Y-%m-%d)"
 DATE_HUMAN="$(date '+%B %-d, %Y')"
 LOGFILE="$LOGDIR/$DATE.log"
 TOKEN_REPORT="$LOGDIR/${DATE}_tokens.md"
-
-# Ensure PATH includes homebrew (for pandoc, gh) and local bin (for claude)
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
 # Allow running from within a Claude Code session (e.g., manual re-runs)
 unset CLAUDECODE 2>/dev/null || true
@@ -39,25 +46,29 @@ if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" && -f "$HOME/.briefing-env" ]]; then
   source "$HOME/.briefing-env"
 fi
 
-# ── Lockfile (prevent concurrent runs) ────────────────────────────────────────
+# ── Lockfile (prevent concurrent runs — local only) ──────────────────────────
+# In CI, GitHub Actions handles concurrency; no lockfile needed.
 
-LOCKFILE="$HOME/.briefing-pipeline.lock"
+if [[ -z "${CI:-}" ]]; then
+  LOCKFILE="$HOME/.briefing-pipeline.lock"
 
-cleanup_lock() {
-  rm -f "$LOCKFILE"
-}
+  cleanup_lock() {
+    rm -f "$LOCKFILE"
+  }
 
-# Check for an existing lock. If the PID in the lockfile is still running, exit.
-if [[ -f "$LOCKFILE" ]]; then
-  LOCK_PID="$(cat "$LOCKFILE" 2>/dev/null || echo "")"
-  if [[ -n "$LOCK_PID" ]] && kill -0 "$LOCK_PID" 2>/dev/null; then
-    echo "[$(date '+%H:%M:%S')] Another pipeline (PID $LOCK_PID) is already running — exiting." >> "${LOGDIR:-/tmp}/$DATE.log"
-    exit 0
+  if [[ -f "$LOCKFILE" ]]; then
+    LOCK_PID="$(cat "$LOCKFILE" 2>/dev/null || echo "")"
+    if [[ -n "$LOCK_PID" ]] && kill -0 "$LOCK_PID" 2>/dev/null; then
+      echo "[$(date '+%H:%M:%S')] Another pipeline (PID $LOCK_PID) is already running — exiting." >> "${LOGDIR:-/tmp}/$DATE.log"
+      exit 0
+    fi
   fi
-  # Stale lockfile — previous run crashed. Clean up and continue.
+  echo $$ > "$LOCKFILE"
+  trap cleanup_lock EXIT
+
+  # ── Prevent Mac from sleeping during the pipeline ────────────────────────
+  /usr/bin/caffeinate -u -s -i -w $$ &
 fi
-echo $$ > "$LOCKFILE"
-trap cleanup_lock EXIT
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -65,7 +76,9 @@ mkdir -p "$LOGDIR" "$WORK_DIR/briefing/daily"
 
 # Truncate launchd stdout log on each run to prevent unbounded growth.
 # The per-day log ($LOGFILE) is the durable record; launchd stdout is transient.
-: > "$LOGDIR/launchd-stdout.log" 2>/dev/null || true
+if [[ -z "${CI:-}" ]]; then
+  : > "$LOGDIR/launchd-stdout.log" 2>/dev/null || true
+fi
 
 log() {
   echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOGFILE"
@@ -73,12 +86,16 @@ log() {
 
 die() {
   log "FATAL: $*"
-  osascript -e "display notification \"$*\" with title \"Briefing Pipeline Failed\"" 2>/dev/null || true
+  if [[ -z "${CI:-}" ]]; then
+    osascript -e "display notification \"$*\" with title \"Briefing Pipeline Failed\"" 2>/dev/null || true
+  fi
   exit 1
 }
 
 notify() {
-  osascript -e "display notification \"$*\" with title \"Morning Briefing\"" 2>/dev/null || true
+  if [[ -z "${CI:-}" ]]; then
+    osascript -e "display notification \"$*\" with title \"Morning Briefing\"" 2>/dev/null || true
+  fi
 }
 
 # Timeout wrapper: run_with_timeout <seconds> <command...>
@@ -132,7 +149,7 @@ log "==========================================="
 log "  Morning briefing pipeline: $DATE_HUMAN"
 log "==========================================="
 
-[[ -x "$CLAUDE" ]] || die "claude CLI not found at $CLAUDE"
+command -v "$CLAUDE" &>/dev/null || [[ -x "$CLAUDE" ]] || die "claude CLI not found"
 command -v pandoc &>/dev/null || die "pandoc not found in PATH"
 command -v git &>/dev/null || die "git not found in PATH"
 
@@ -218,7 +235,11 @@ research_call() {
   # IMPORTANT: Do NOT call this function inside $() — background processes
   # launched in a $() subshell become orphans that the main shell cannot wait on.
   # Instead, read the PID from the global _RESEARCH_PID after calling.
-  ( cd /tmp && "$CLAUDE" -p "$prompt" \
+  #
+  # exec replaces the subshell with the claude process, so kill $PID sends the
+  # signal directly to claude rather than to a wrapper subshell (which can't
+  # forward signals to its children while they're running).
+  ( cd /tmp && exec "$CLAUDE" -p "$prompt" \
       --max-turns "$max_turns" \
       --model sonnet \
       --no-session-persistence \
@@ -406,6 +427,45 @@ wait_step "$PID_ARTS"    "1g-arts"       "$RESEARCH_TMP/06-arts.md"
 
 kill "$RESEARCH_WATCHDOG" 2>/dev/null || true
 wait "$RESEARCH_WATCHDOG" 2>/dev/null || true
+
+# ── Retry failed sub-steps (sequentially, to avoid rate-limit contention) ─
+
+retry_if_empty() {
+  local outfile="$1" name="$2" max_turns="$3"
+  shift 3
+  local prompt="$*"
+  local lines=0
+  [[ -f "$outfile" ]] && lines=$(wc -l < "$outfile" | tr -d ' ')
+  if [[ "$lines" -lt 4 ]]; then
+    log "  Retrying $name (was $lines lines)..."
+    ( cd /tmp && exec "$CLAUDE" -p "$prompt" \
+        --max-turns "$max_turns" \
+        --model sonnet \
+        --no-session-persistence \
+        --dangerously-skip-permissions \
+    ) > "$outfile" 2>> "$LOGFILE" || true
+    local retry_lines=0
+    [[ -f "$outfile" ]] && retry_lines=$(wc -l < "$outfile" | tr -d ' ')
+    if [[ "$retry_lines" -gt 3 ]]; then
+      log "  Retry $name: OK ($retry_lines lines)"
+    else
+      log "  Retry $name: still failed ($retry_lines lines)"
+    fi
+  fi
+}
+
+# Retry any sub-steps that produced empty output — one at a time
+retry_if_empty "$RESEARCH_TMP/03-science.md" "1d-science" 5 \
+"Today is $DATE_HUMAN. Search for science, technology, and public health news from the past 48 hours. Check for: US measles cases, H5N1 bird flu updates, COVID-19 data, major studies in Nature/Science/Lancet/NEJM/JAMA, significant tech/AI policy developments. For each item: ### [Headline] - **Source:** [Publication](URL) - **Key finding:** [1-2 sentences with specific numbers] - **Significance:** [1 sentence]. Include at least 3-5 items with full URLs. Print directly — do NOT write files."
+
+retry_if_empty "$RESEARCH_TMP/04-economy.md" "1e-economy" 5 \
+"Today is $DATE_HUMAN. Get the latest market data: Dow Jones, S&P 500, Nasdaq (points, change, %), European indices (FTSE, DAX), Asian indices (Nikkei, Shanghai, Hang Seng). Commodities: Oil WTI, Brent, Gold. Crypto: Bitcoin, Ethereum. Any major economic data releases (GDP, jobs, inflation, PMI, central bank decisions). Any major corporate/trade developments. Include source URLs. Print directly — do NOT write files."
+
+retry_if_empty "$RESEARCH_TMP/05-pseudoleft.md" "1f-pseudoleft" 5 \
+"Today is $DATE_HUMAN. Scan these pseudo-left publications for their 2-3 most notable articles from the past 24 hours: Jacobin, Left Voice, Liberation News/PSL, Socialist Alternative, SWP UK, Socialist Appeal/RCP. For each: ### [Tendency name] - **Article title** — [URL] - Political line: [1-2 sentence summary]. Note any support for bourgeois parties, failure to oppose imperialist war, national-reformist programs. Print directly — do NOT write files."
+
+retry_if_empty "$RESEARCH_TMP/06-arts.md" "1g-arts" 3 \
+"Today is $DATE_HUMAN. Search for 3-6 major arts, culture, film, theater, and music news items from the past 24 hours. For each: ### [Headline] - **Source:** [Publication](URL) - **Summary:** [1-2 sentences] - **Significance:** [1 sentence]. Print directly — do NOT write files."
 
 # ── Validate critical sections ───────────────────────────────────────────────
 

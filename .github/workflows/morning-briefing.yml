@@ -1,0 +1,60 @@
+name: Morning Briefing Pipeline
+
+on:
+  schedule:
+    # 6:00 AM Eastern Time — dual schedule to handle daylight saving:
+    #   10:00 UTC = 6:00 AM EDT (March–November)
+    #   11:00 UTC = 6:00 AM EST (November–March)
+    # The script's "already published" check prevents double-runs.
+    - cron: '0 10 * * *'
+    - cron: '0 11 * * *'
+  workflow_dispatch: # manual trigger for testing
+
+permissions:
+  contents: write  # needed for git push in publish.sh
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      CI: true
+      DISABLE_AUTOUPDATER: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for archive/search-index generation
+
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Install Claude CLI
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Verify tools
+        run: |
+          claude --version
+          pandoc --version | head -1
+          git --version
+
+      - name: Configure git for CI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run briefing pipeline
+        run: bash ./morning-briefing.sh
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: briefing-logs-${{ github.run_id }}
+          path: briefing/logs/
+          retention-days: 30
