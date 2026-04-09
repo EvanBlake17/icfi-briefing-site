@@ -35,6 +35,22 @@ DATE_HUMAN="$(date '+%B %-d, %Y')"
 LOGFILE="$LOGDIR/$DATE.log"
 TOKEN_REPORT="$LOGDIR/${DATE}_tokens.md"
 
+# ── Time-window guard (local only) ──────────────────────────────────────────
+# Don't start before this hour (local time). The 5-minute polling agent would
+# otherwise fire at midnight when the date rolls over, producing a briefing
+# with stale/incomplete content. Set to 5 (5:00 AM) so the pipeline finishes
+# by ~6:00-7:00 AM.  Override with BRIEFING_EARLIEST_HOUR env var.
+# Skipped in CI (GitHub Actions) and when BRIEFING_FORCE=1 (manual runs).
+EARLIEST_HOUR="${BRIEFING_EARLIEST_HOUR:-5}"
+if [[ -z "${CI:-}" && -z "${BRIEFING_FORCE:-}" ]]; then
+  CURRENT_HOUR="$(date +%-H)"
+  if (( CURRENT_HOUR < EARLIEST_HOUR )); then
+    mkdir -p "$LOGDIR"
+    echo "[$(date '+%H:%M:%S')] Too early ($CURRENT_HOUR:xx < ${EARLIEST_HOUR}:00) — skipping." >> "$LOGFILE"
+    exit 0
+  fi
+fi
+
 # Allow running from within a Claude Code session (e.g., manual re-runs)
 unset CLAUDECODE 2>/dev/null || true
 
