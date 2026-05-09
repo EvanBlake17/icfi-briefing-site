@@ -5,7 +5,7 @@
 /* Auth toggle — set to false to disable the login gate entirely.
    When false the site works without Supabase; highlights are
    stored in the browser's localStorage instead.               */
-var AUTH_ENABLED = true;
+var AUTH_ENABLED = false;
 
 /* Supabase credentials (only needed when AUTH_ENABLED = true).
    The anon key is safe to expose in client code — it can only
