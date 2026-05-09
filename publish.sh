@@ -410,6 +410,7 @@ MSG="${COMMIT_MSG:-"Add briefing: $DATE_FORMATTED"}"
 git commit -m "$MSG"
 
 echo "→ Pushing to remote..."
+git pull --rebase --autostash origin main
 git push
 
 echo ""
