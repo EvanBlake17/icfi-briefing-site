@@ -447,8 +447,8 @@ wait "$RESEARCH_WATCHDOG" 2>/dev/null || true
 # ── Retry failed sub-steps (sequentially, to avoid rate-limit contention) ─
 
 retry_if_empty() {
-  local outfile="$1" name="$2" max_turns="$3"
-  shift 3
+  local timeout_secs="$1" outfile="$2" name="$3" max_turns="$4"
+  shift 4
   local prompt="$*"
   local lines=0
   [[ -f "$outfile" ]] && lines=$(wc -l < "$outfile" | tr -d ' ')
@@ -459,7 +459,18 @@ retry_if_empty() {
         --model sonnet \
         --no-session-persistence \
         --dangerously-skip-permissions \
-    ) > "$outfile" 2>> "$LOGFILE" || true
+    ) > "$outfile" 2>> "$LOGFILE" &
+    local retry_pid=$!
+    ( sleep "$timeout_secs"
+      if kill -0 "$retry_pid" 2>/dev/null; then
+        log "  WARNING: Retry $name timed out after ${timeout_secs}s — killing"
+        kill "$retry_pid" 2>/dev/null; sleep 3; kill -9 "$retry_pid" 2>/dev/null
+      fi
+    ) &
+    local watchdog_pid=$!
+    wait "$retry_pid" 2>/dev/null || true
+    kill "$watchdog_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
     local retry_lines=0
     [[ -f "$outfile" ]] && retry_lines=$(wc -l < "$outfile" | tr -d ' ')
     if [[ "$retry_lines" -gt 3 ]]; then
@@ -471,16 +482,16 @@ retry_if_empty() {
 }
 
 # Retry any sub-steps that produced empty output — one at a time
-retry_if_empty "$RESEARCH_TMP/03-science.md" "1d-science" 5 \
+retry_if_empty 300 "$RESEARCH_TMP/03-science.md" "1d-science" 5 \
 "Today is $DATE_HUMAN. Search for science, technology, and public health news from the past 48 hours. Check for: US measles cases, H5N1 bird flu updates, COVID-19 data, major studies in Nature/Science/Lancet/NEJM/JAMA, significant tech/AI policy developments. For each item: ### [Headline] - **Source:** [Publication](URL) - **Key finding:** [1-2 sentences with specific numbers] - **Significance:** [1 sentence]. Include at least 3-5 items with full URLs. Print directly — do NOT write files."
 
-retry_if_empty "$RESEARCH_TMP/04-economy.md" "1e-economy" 5 \
+retry_if_empty 300 "$RESEARCH_TMP/04-economy.md" "1e-economy" 5 \
 "Today is $DATE_HUMAN. Get the latest market data: Dow Jones, S&P 500, Nasdaq (points, change, %), European indices (FTSE, DAX), Asian indices (Nikkei, Shanghai, Hang Seng). Commodities: Oil WTI, Brent, Gold. Crypto: Bitcoin, Ethereum. Any major economic data releases (GDP, jobs, inflation, PMI, central bank decisions). Any major corporate/trade developments. Include source URLs. Print directly — do NOT write files."
 
-retry_if_empty "$RESEARCH_TMP/05-pseudoleft.md" "1f-pseudoleft" 5 \
+retry_if_empty 300 "$RESEARCH_TMP/05-pseudoleft.md" "1f-pseudoleft" 5 \
 "Today is $DATE_HUMAN. Scan these pseudo-left publications for their 2-3 most notable articles from the past 24 hours: Jacobin, Left Voice, Liberation News/PSL, Socialist Alternative, SWP UK, Socialist Appeal/RCP. For each: ### [Tendency name] - **Article title** — [URL] - Political line: [1-2 sentence summary]. Note any support for bourgeois parties, failure to oppose imperialist war, national-reformist programs. Print directly — do NOT write files."
 
-retry_if_empty "$RESEARCH_TMP/06-arts.md" "1g-arts" 3 \
+retry_if_empty 300 "$RESEARCH_TMP/06-arts.md" "1g-arts" 3 \
 "Today is $DATE_HUMAN. Search for 3-6 major arts, culture, film, theater, and music news items from the past 24 hours. For each: ### [Headline] - **Source:** [Publication](URL) - **Summary:** [1-2 sentences] - **Significance:** [1 sentence]. Print directly — do NOT write files."
 
 # ── Validate critical sections ───────────────────────────────────────────────
