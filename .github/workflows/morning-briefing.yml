@@ -2,14 +2,13 @@ name: Morning Briefing Pipeline
 
 on:
   schedule:
-    # 11:00 PM Eastern Time — off-peak UTC slot minimizes GitHub queue delay.
-    # Worst-case 1h GitHub delay → fires midnight EDT → resets 5 AM EDT → fresh
-    # window available well before 8 AM.
-    #   03:00 UTC = 11:00 PM EDT (March–November)
-    #   04:00 UTC = 11:00 PM EST (November–March)
+    # 3:00 AM Eastern Time — captures overnight European/world news before
+    # the US morning review. Dual schedule handles daylight saving time.
+    #   07:00 UTC = 3:00 AM EDT (March–November)
+    #   08:00 UTC = 3:00 AM EST (November–March)
     # The script's "already published" check prevents double-runs.
-    - cron: '0 3 * * *'
-    - cron: '0 4 * * *'
+    - cron: '0 7 * * *'
+    - cron: '0 8 * * *'
   workflow_dispatch: # manual trigger for testing
 
 permissions:
