@@ -12,7 +12,7 @@ The briefing is produced by a two-agent pipeline, automated via shell scripts:
 
 German translation (`translate-briefing.sh`) is **disabled** and not part of the pipeline.
 
-Production runs only on GitHub Actions (`.github/workflows/morning-briefing.yml`), inside a 02:30–04:30 ET window, at most 2 attempts/day. Do NOT re-enable the local launchd jobs. Manual run: Actions → Morning Briefing Pipeline → Run workflow (tick "force"), or locally `BRIEFING_FORCE=1 ./morning-briefing.sh`. Failure history and design rationale: `educational-materials/03-failure-debrief-and-relaunch-plan.md`.
+Production runs only on GitHub Actions (`.github/workflows/daily-briefing.yml`), inside a 02:30–04:30 ET window, at most 2 attempts/day. Do NOT re-enable the local launchd jobs. Manual run: Actions → Morning Briefing Pipeline → Run workflow (tick "force"), or locally `BRIEFING_FORCE=1 ./morning-briefing.sh`. Failure history and design rationale: `educational-materials/03-failure-debrief-and-relaunch-plan.md`.
 
 ## Key Files
 

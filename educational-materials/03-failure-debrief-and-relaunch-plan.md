@@ -57,7 +57,7 @@
 
 ### Implemented on branch `claude/friendly-bohr-llulw0`
 
-**Workflow (`.github/workflows/morning-briefing.yml`)**
+**Workflow (`.github/workflows/daily-briefing.yml`)**
 - **Window 02:30–04:30 ET.** A 5-hour usage window opened by a ~3 AM run resets by ~8 AM, before the working day, and the briefing is ready well before 7 AM. The window is configurable through `BRIEFING_WINDOW_START/END`.
 - **Seven cron fires at odd minutes** (06:17–09:17 UTC) cover the window in both EDT and EST. A **gate step** skips any fire that is outside the window, already published, or past the cap. A skip uses about 1 minute of Actions time and no Claude tokens.
 - **At most 2 full attempts per day.** A counter in the Actions cache is incremented *before* the pipeline starts, so cancelled runs count too.
@@ -78,7 +78,7 @@
 1. Review and merge the branch into `main`.
 2. Make sure the `CLAUDE_CODE_OAUTH_TOKEN` secret is still valid (the auth check failed on Aug 28). Regenerate it with `claude setup-token` if needed.
 3. Run once by hand: Actions → Morning Briefing Pipeline → Run workflow, with **force** ticked.
-4. Re-enable the workflow (it is currently `disabled_manually`).
+4. Re-enable: the old workflow (`morning-briefing.yml`, 349 runs) stays `disabled_manually`; the pipeline now lives in `daily-briefing.yml`, which is a new, enabled workflow with the same name.
 5. Watch for 5 days. Pass criteria: published by 7 AM ET on 5 of 5 days, no attempts outside the window, at most 1 retry.
 6. Optional: if GitHub's delays still push fires past 04:30 ET on some days, add an external trigger (for example cron-job.org POSTing to the `workflow_dispatch` API at 02:45 ET).
 
