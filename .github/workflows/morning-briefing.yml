@@ -2,27 +2,55 @@ name: Morning Briefing Pipeline
 
 on:
   schedule:
-    # 3:00 AM Eastern Time — captures overnight European/world news before
-    # the US morning review. Dual schedule handles daylight saving time.
-    #   07:00 UTC = 3:00 AM EDT (March–November)
-    #   08:00 UTC = 3:00 AM EST (November–March)
-    # The script's "already published" check prevents double-runs.
-    - cron: '0 7 * * *'
-    - cron: '0 8 * * *'
-  workflow_dispatch: # manual trigger for testing
+    # GitHub's scheduler is best-effort: runs routinely start 30 min to several
+    # hours late, and on-the-hour slots are the most congested. So we fire
+    # several times at odd minutes and let the gate step decide. A fire outside
+    # the Eastern-time window, after the briefing is published, or after the
+    # daily attempt cap is reached costs no Claude tokens (the job exits in ~1 min).
+    #
+    # Window: 02:30–04:30 America/New_York (see BRIEFING_WINDOW_* below).
+    # These UTC slots cover that window in both EDT (UTC-4) and EST (UTC-5).
+    - cron: '17 6 * * *'
+    - cron: '47 6 * * *'
+    - cron: '17 7 * * *'
+    - cron: '47 7 * * *'
+    - cron: '17 8 * * *'
+    - cron: '47 8 * * *'
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Bypass the time window and daily attempt cap (manual run)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write  # needed for git push in publish.sh
 
+# Never run two pipelines at once (two overlapping runs on Aug 19 each burned
+# 90 minutes and published nothing). Queued fires wait, then hit the gate.
+concurrency:
+  group: morning-briefing
+  cancel-in-progress: false
+
+env:
+  TZ: America/New_York
+  # The briefing shares Evan's Max-plan 5-hour usage window. Starting by 04:30 ET
+  # means the window it opens has reset before the working day starts.
+  BRIEFING_WINDOW_START: "2.5"   # 02:30 ET
+  BRIEFING_WINDOW_END: "4.5"     # 04:30 ET — no new attempt starts after this
+  BRIEFING_MAX_ATTEMPTS: "2"     # full pipeline attempts per day
+
 jobs:
   briefing:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
 
     env:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       CI: true
       DISABLE_AUTOUPDATER: "1"
+      BRIEFING_FORCE: ${{ inputs.force && '1' || '' }}
 
     steps:
       - name: Checkout repository
@@ -30,32 +58,101 @@ jobs:
         with:
           fetch-depth: 0  # full history for archive/search-index generation
 
+      # ── Gate: decide whether this fire should spend any tokens ──────────────
+      - name: Compute date
+        id: date
+        run: echo "today=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore attempt counter
+        uses: actions/cache/restore@v4
+        with:
+          path: .attempts
+          key: briefing-attempts-${{ steps.date.outputs.today }}-${{ github.run_id }}
+          restore-keys: briefing-attempts-${{ steps.date.outputs.today }}-
+
+      - name: Gate
+        id: gate
+        run: |
+          TODAY="${{ steps.date.outputs.today }}"
+          NOW_H=$(date +%-H); NOW_M=$(date +%-M)
+          NOW=$(awk -v h="$NOW_H" -v m="$NOW_M" 'BEGIN{printf "%.3f", h + m/60}')
+          ATTEMPTS=$(cat .attempts 2>/dev/null || echo 0)
+          reason=""
+          if [[ -f "briefings/$TODAY.html" ]]; then
+            reason="already published for $TODAY"
+          elif [[ -z "$BRIEFING_FORCE" ]]; then
+            if awk -v n="$NOW" -v s="$BRIEFING_WINDOW_START" -v e="$BRIEFING_WINDOW_END" 'BEGIN{exit !(n < s || n >= e)}'; then
+              reason="outside window ($(date +%H:%M) ET; window ${BRIEFING_WINDOW_START}–${BRIEFING_WINDOW_END}h)"
+            elif (( ATTEMPTS >= BRIEFING_MAX_ATTEMPTS )); then
+              reason="attempt cap reached ($ATTEMPTS/$BRIEFING_MAX_ATTEMPTS today)"
+            fi
+          fi
+          if [[ -n "$reason" ]]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping: $reason" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo $(( ATTEMPTS + 1 )) > .attempts
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Starting attempt $(( ATTEMPTS + 1 )) for $TODAY at $(date +%H:%M) ET${BRIEFING_FORCE:+ (forced)}" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Save the incremented counter immediately, so even a cancelled or
+      # timed-out attempt counts against the daily cap.
+      - name: Save attempt counter
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .attempts
+          key: briefing-attempts-${{ steps.date.outputs.today }}-${{ github.run_id }}
+
+      # ── Pipeline ────────────────────────────────────────────────────────────
       - name: Install pandoc
+        if: steps.gate.outputs.run == 'true'
         run: sudo apt-get update && sudo apt-get install -y pandoc
 
       - name: Install Claude CLI
+        if: steps.gate.outputs.run == 'true'
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Verify tools
+        if: steps.gate.outputs.run == 'true'
         run: |
           claude --version
           pandoc --version | head -1
           git --version
 
       - name: Configure git for CI
+        if: steps.gate.outputs.run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Run briefing pipeline
+        if: steps.gate.outputs.run == 'true'
+        # The gate already enforced the window; tell the script not to re-check
+        # it (a run that waited in the concurrency queue may start a bit late).
+        env:
+          BRIEFING_FORCE: "1"
         run: bash ./morning-briefing.sh
 
+      - name: Write log tail to job summary
+        if: always() && steps.gate.outputs.run == 'true'
+        run: |
+          LOG="briefing/logs/$(date +%Y-%m-%d).log"
+          [[ -f "$LOG" ]] || exit 0
+          {
+            echo '### Pipeline log (last 60 lines)'
+            echo '```'
+            tail -n 60 "$LOG"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload logs as artifact
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: briefing-logs-${{ github.run_id }}
           path: briefing/logs/
-          retention-days: 30
+          retention-days: 90

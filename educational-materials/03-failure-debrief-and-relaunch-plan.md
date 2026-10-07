@@ -43,40 +43,45 @@
 
 ---
 
-## Relaunch plan
+## Findings from the local Mac investigation (Oct 6)
 
-**Goal:** the briefing is published by 7:00 AM ET every day, no model calls run after ~7:30 AM ET, and a failed day costs at most one attempt plus one bounded retry.
+- **The Mac is clean.** Both launchd plists (`com.icfi.morning-briefing`, which polled every 5 minutes, and `-watchdog`) are in `~/Library/LaunchAgents/disabled/` and not loaded. There is no crontab, no Claude Desktop scheduled task, and no running briefing process. The last local production run was May 9.
+- **The most common sub-step failure was running out of turns, not hitting quota.** Failed outputs contain `Error: Reached max turns (3)` or `(5)`, which is 28 bytes. When `claude -p` hits `--max-turns` it prints only that error and **throws away everything it gathered**. The tokens are spent and nothing comes back. Arts (3 turns) and economy/pseudo-left (5 turns) failed most often. The writer also hit `Reached max turns (30)` once (Apr 30).
+- Other errors seen: `API Error: Stream idle timeout - partial response received`; one writer refusal under the Usage Policy (May 3); an auth-check failure on Aug 28. No local log contains a usage-limit message.
+- **Same account:** the briefing's OAuth token belongs to the account Evan uses interactively, so it draws on the same 5-hour window and weekly cap. A new cloud routine, "Lehman count tracker refresh" (Opus, hourly 08:00–23:00, 16 runs a day), also draws on that account.
+- Stale local memory files still list the cron as 10:00/11:00 UTC.
 
-### Phase 0: clean up the local machine (do this first)
+---
 
-The Mac may still have launchd jobs or a polling agent left over from the earlier setup. If they're still installed, they spend tokens and compete with CI. Use the local investigation prompt to find and disable them.
+## Relaunch plan (decisions: same account; German stays off)
 
-### Phase 1: make the trigger precise
+### Implemented on branch `claude/friendly-bohr-llulw0`
 
-Replace GitHub's best-effort cron with a reliable trigger that calls `workflow_dispatch`:
+**Workflow (`.github/workflows/morning-briefing.yml`)**
+- **Window 02:30–04:30 ET.** A 5-hour usage window opened by a ~3 AM run resets by ~8 AM, before the working day, and the briefing is ready well before 7 AM. The window is configurable through `BRIEFING_WINDOW_START/END`.
+- **Seven cron fires at odd minutes** (06:17–09:17 UTC) cover the window in both EDT and EST. A **gate step** skips any fire that is outside the window, already published, or past the cap. A skip uses about 1 minute of Actions time and no Claude tokens.
+- **At most 2 full attempts per day.** A counter in the Actions cache is incremented *before* the pipeline starts, so cancelled runs count too.
+- A `concurrency` group means two runs never overlap.
+- The job timeout is 60 min (was 90). Each run's log tail goes to the job summary, and artifacts are kept 90 days (was 30).
+- `workflow_dispatch` has a **force** checkbox for manual runs.
 
-- **Recommended:** a Claude Code Routine or a free external scheduler (for example cron-job.org) that POSTs to the GitHub API `workflows/morning-briefing.yml/dispatches` at **5:00 AM ET**, with a second attempt at 6:00 AM ET. Starting at 5:00 leaves ~2 hours of slack before 7:00. Keep the GitHub `schedule:` only as a late backstop, and protect it with the deadline guard below.
-- Use a timezone-aware schedule (for example `CRON_TZ=America/New_York`) so the DST double-cron hack goes away.
+**Script (`morning-briefing.sh`)**
+- The time guard now applies to every run, using Eastern time (it was local-only, hour-based).
+- The preflight now tests **Sonnet and Opus** (it used to test haiku). On a usage/rate-limit message it stops before research.
+- Turn caps are raised (news/WSWS 10→15, science/economy 5→10, pseudo-left 5→12, arts 3→8). Every research prompt now states its turn budget and asks the model to print partial results instead of hitting the cap.
+- **Fail fast:** if any failed research output contains a limit message, or 4 or more of the 6 calls fail within 90 seconds, the run stops with no retries and no writer.
+- News and WSWS are now retried once too. The writer runs only if **both** news **and** WSWS succeeded (before, it ran unless both were empty).
+- Writer: WebSearch is disabled (WebFetch stays for the Perspective date check) and the timeout is 30 min (was 60).
+- Failure text such as `Reached max turns` is now written to the log.
 
-### Phase 2: stop the wasted spending (changes to the workflow and script)
+### Remaining steps
+1. Review and merge the branch into `main`.
+2. Make sure the `CLAUDE_CODE_OAUTH_TOKEN` secret is still valid (the auth check failed on Aug 28). Regenerate it with `claude setup-token` if needed.
+3. Run once by hand: Actions → Morning Briefing Pipeline → Run workflow, with **force** ticked.
+4. Re-enable the workflow (it is currently `disabled_manually`).
+5. Watch for 5 days. Pass criteria: published by 7 AM ET on 5 of 5 days, no attempts outside the window, at most 1 retry.
+6. Optional: if GitHub's delays still push fires past 04:30 ET on some days, add an external trigger (for example cron-job.org POSTing to the `workflow_dispatch` API at 02:45 ET).
 
-1. Add `concurrency: { group: morning-briefing, cancel-in-progress: false }` to the workflow.
-2. **Deadline guard (CI too):** compute the current hour in `America/New_York` and exit 0 before any model call if it's before 4:30 AM or after 7:30 AM.
-3. **Attempt ledger:** record attempts for the day (for example a `briefing/attempts/YYYY-MM-DD` marker committed to the repo, or a run-count check through the API). Allow at most 2 attempts per day.
-4. **Real preflight:** ping `--model sonnet` and `--model opus` with a one-word prompt. If either fails, `grep` the error for "limit", "rate", "overloaded" or "credit", write it to `$GITHUB_STEP_SUMMARY`, and stop before the research step.
-5. **Fail fast on limits during research:** if two or more research calls fail in under 30 seconds, treat it as a quota problem. Don't retry and don't launch the writer.
-6. **Gate the writer:** require *both* news and WSWS research to succeed (the current check fails only when both are empty).
-7. **Bound the writer:** remove WebSearch/WebFetch from the writer (it has the raw material), lower the timeout to about 25 min (successful runs finish the whole pipeline in 15–20 min), and add a budget cap if the installed CLI supports one (`claude --help | grep -i budget`).
-8. **Keep the evidence:** append the step timings and the last 20 stderr lines to `$GITHUB_STEP_SUMMARY`. Raise artifact retention to 90 days.
-
-### Phase 3: dry run, then go live
-
-1. Run once by hand via `workflow_dispatch` with `BRIEFING_FORCE=1`, at an off-hours time.
-2. Re-enable the workflow and turn on the external trigger.
-3. Watch for 5 days: start time, finish time, and attempts per day. Pass criteria: published by 7 AM ET on 5 of 5 days, no runs after 7:30 AM ET, and no more than 1 retry.
-
-### Open questions for Evan
-
-- Which plan is `CLAUDE_CODE_OAUTH_TOKEN` tied to (Max 5x or 20x), and is it the same account you use interactively? If it is, the briefing shares your 5-hour window and weekly cap. A separate account, or an API key with a hard monthly spend limit, would isolate it completely.
-- Which hours count as "peak" for you: the hours you work interactively, or Anthropic's peak-demand hours? The 4:30–7:30 AM ET window above avoids both. Anthropic's weekday peak was 5–11 AM PT (8 AM–2 PM ET), and third-party reports say peak throttling was lifted for Pro/Max in May 2026, so check this against your own usage page.
-- Should the German translation stay disabled? (It was turned off on Mar 3, and CLAUDE.md still describes it as active.)
+### Things to decide outside this repo
+- The hourly Opus "Lehman count tracker" routine draws on the same weekly cap as the briefing.
+- Update the stale memory files on the Mac (cron times), or delete them.

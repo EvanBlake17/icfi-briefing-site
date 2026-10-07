@@ -35,18 +35,20 @@ DATE_HUMAN="$(date '+%B %-d, %Y')"
 LOGFILE="$LOGDIR/$DATE.log"
 TOKEN_REPORT="$LOGDIR/${DATE}_tokens.md"
 
-# ── Time-window guard (local only) ──────────────────────────────────────────
-# Don't start before this hour (local time). The 5-minute polling agent would
-# otherwise fire at midnight when the date rolls over, producing a briefing
-# with stale/incomplete content. Set to 5 (5:00 AM) so the pipeline finishes
-# by ~6:00-7:00 AM.  Override with BRIEFING_EARLIEST_HOUR env var.
-# Skipped in CI (GitHub Actions) and when BRIEFING_FORCE=1 (manual runs).
-EARLIEST_HOUR="${BRIEFING_EARLIEST_HOUR:-5}"
-if [[ -z "${CI:-}" && -z "${BRIEFING_FORCE:-}" ]]; then
-  CURRENT_HOUR="$(date +%-H)"
-  if (( CURRENT_HOUR < EARLIEST_HOUR )); then
+# ── Time-window guard ────────────────────────────────────────────────────────
+# Only start inside the early-morning Eastern-time window. The briefing shares
+# Evan's Max-plan 5-hour usage window, so it must run (and finish) well before
+# the working day; a late-firing trigger must not spend tokens mid-morning.
+# Hours may be fractional (2.5 = 02:30). In CI the workflow's gate step applies
+# the same window and sets BRIEFING_FORCE=1. Bypass with BRIEFING_FORCE=1.
+WINDOW_START="${BRIEFING_WINDOW_START:-2.5}"
+WINDOW_END="${BRIEFING_WINDOW_END:-4.5}"
+if [[ -z "${BRIEFING_FORCE:-}" ]]; then
+  NOW_ET="$(TZ=America/New_York date +%-H:%-M)"
+  if awk -v t="$NOW_ET" -v s="$WINDOW_START" -v e="$WINDOW_END" \
+       'BEGIN{split(t,a,":"); n=a[1]+a[2]/60; exit !(n < s || n >= e)}'; then
     mkdir -p "$LOGDIR"
-    echo "[$(date '+%H:%M:%S')] Too early ($CURRENT_HOUR:xx < ${EARLIEST_HOUR}:00) — skipping." >> "$LOGFILE"
+    echo "[$(date '+%H:%M:%S')] Outside window ($NOW_ET ET; ${WINDOW_START}–${WINDOW_END}h) — skipping." >> "$LOGFILE"
     exit 0
   fi
 fi
@@ -175,18 +177,26 @@ if [[ -f "$SITE_DIR/briefings/$DATE.html" ]]; then
   exit 0
 fi
 
-# Pre-flight auth check — catch expired tokens early instead of after a long run.
-# Uses haiku (cheapest/fastest model), disables tools and session persistence,
-# and skips project settings to avoid loading agents/MCP config.
-log "Preflight: Testing claude CLI authentication..."
-AUTH_TEST=$("$CLAUDE" -p "Say OK" \
-  --max-turns 1 \
-  --model haiku \
-  --tools "" \
-  --no-session-persistence \
-  --dangerously-skip-permissions \
-  2>> "$LOGFILE") || die "claude CLI auth check failed — check CLAUDE_CODE_OAUTH_TOKEN in ~/.briefing-env"
-log "Preflight: Auth OK"
+# Pre-flight check — test the models the pipeline actually uses (a haiku-only
+# check passed on Sep 1 while every Sonnet/Opus call failed within seconds).
+# Tools, session persistence and project settings are skipped to keep it cheap.
+# Any failure here stops the run before research spends anything.
+for model in sonnet opus; do
+  log "Preflight: Testing $model..."
+  PF_OUT=$( (cd /tmp && "$CLAUDE" -p "Say OK" \
+    --max-turns 1 \
+    --model "$model" \
+    --tools "" \
+    --no-session-persistence \
+    --dangerously-skip-permissions) 2>&1 ) || {
+      log "Preflight output: $(echo "$PF_OUT" | tail -5)"
+      if echo "$PF_OUT" | grep -qiE 'limit|rate|quota|overloaded|credit|usage'; then
+        die "Preflight: $model unavailable — usage/rate limit. Not starting."
+      fi
+      die "Preflight: $model call failed — check CLAUDE_CODE_OAUTH_TOKEN"
+    }
+done
+log "Preflight: Sonnet and Opus OK"
 
 # Initialize token report
 {
@@ -241,10 +251,20 @@ log "  1a: Done"
 
 _RESEARCH_PID=0   # global — set by research_call, read by caller
 
+# Appended to every research prompt. Hitting --max-turns makes claude -p print
+# only "Error: Reached max turns (N)" and discard everything gathered so far —
+# the most common sub-step failure in the logs. Tell the model its budget.
+budget_note() {
+  local max_turns="$1"
+  echo "
+
+HARD LIMIT: you have $max_turns turns in total and every tool call uses one. Make at most $(( max_turns - 2 )) tool calls, then stop searching and print your answer. If you run short, print what you have — partial output is far better than none."
+}
+
 research_call() {
   local name="$1" max_turns="$2" outfile="$3"
   shift 3
-  local prompt="$*"
+  local prompt="$*$(budget_note "$max_turns")"
 
   log "  $name: Starting..."
   # Run from /tmp to avoid loading project CLAUDE.md and agents (saves tokens).
@@ -266,8 +286,7 @@ research_call() {
 
 # ── 1b: Top news stories ────────────────────────────────────────────────────
 
-research_call "1b-news" 10 "$RESEARCH_TMP/01-news.md" \
-"Today is $DATE_HUMAN. Search for the 8-10 most significant world news stories from the past 24 hours. Use WebSearch to find stories, then use WebFetch on the 2-3 most important articles for detail.
+PROMPT_NEWS="Today is $DATE_HUMAN. Search for the 8-10 most significant world news stories from the past 24 hours. Use WebSearch to find stories, then use WebFetch on the 2-3 most important articles for detail.
 
 For each story, output in this exact format:
 
@@ -284,12 +303,12 @@ Also identify 5+ significant stories a socialist publication should cover. For e
 - **Best source:** [Publication — Article headline](URL)
 
 Print your entire response directly — do NOT use the Write tool or write any files."
+research_call "1b-news" 15 "$RESEARCH_TMP/01-news.md" "$PROMPT_NEWS"
 PID_NEWS=$_RESEARCH_PID
 
 # ── 1c: WSWS articles ───────────────────────────────────────────────────────
 
-research_call "1c-wsws" 10 "$RESEARCH_TMP/02-wsws.md" \
-"Today is $DATE_HUMAN. Gather all WSWS articles published today.
+PROMPT_WSWS="Today is $DATE_HUMAN. Gather all WSWS articles published today.
 
 STEP 1: Fetch https://www.wsws.org/en/topics/site_area/perspectives to find today's Perspective. The Perspective MUST be dated today ($DATE). Verify the article URL contains /$DATE/ (with slashes replaced as in the URL pattern). If no Perspective was published today, note this explicitly.
 
@@ -310,11 +329,12 @@ For each other article:
 - Overlaps with bourgeois press: [Yes — which / No]
 
 Print your entire response directly — do NOT use the Write tool or write any files."
+research_call "1c-wsws" 15 "$RESEARCH_TMP/02-wsws.md" "$PROMPT_WSWS"
 PID_WSWS=$_RESEARCH_PID
 
 # ── 1d: Science and health ──────────────────────────────────────────────────
 
-research_call "1d-science" 5 "$RESEARCH_TMP/03-science.md" \
+research_call "1d-science" 10 "$RESEARCH_TMP/03-science.md" \
 "Today is $DATE_HUMAN. Search for science, technology, and public health news from the past 48 hours. Check for:
 - US measles cases (latest CDC data from cdc.gov/measles/data-research/)
 - H5N1 bird flu updates
@@ -333,7 +353,7 @@ PID_SCIENCE=$_RESEARCH_PID
 
 # ── 1e: World economy and markets ───────────────────────────────────────────
 
-research_call "1e-economy" 5 "$RESEARCH_TMP/04-economy.md" \
+research_call "1e-economy" 10 "$RESEARCH_TMP/04-economy.md" \
 "Today is $DATE_HUMAN. Get the latest market data and economic news. I need specific numbers:
 
 ### Markets (most recent close)
@@ -363,7 +383,7 @@ PID_ECONOMY=$_RESEARCH_PID
 
 # ── 1f: Pseudo-left press ───────────────────────────────────────────────────
 
-research_call "1f-pseudoleft" 5 "$RESEARCH_TMP/05-pseudoleft.md" \
+research_call "1f-pseudoleft" 12 "$RESEARCH_TMP/05-pseudoleft.md" \
 "Today is $DATE_HUMAN. Scan these pseudo-left publications for their 2-3 most notable articles from the past 24 hours. Scan headlines and opening paragraphs only — do not read in depth.
 
 Check: Jacobin (jacobin.com), Left Voice (leftvoice.org), Liberation News/PSL (liberationnews.org), Socialist Alternative (socialistalternative.org), SWP UK (socialistworker.co.uk), Socialist Appeal/RCP (socialist.net or communist.red)
@@ -382,7 +402,7 @@ PID_PSEUDO=$_RESEARCH_PID
 
 # ── 1g: Arts and culture ────────────────────────────────────────────────────
 
-research_call "1g-arts" 3 "$RESEARCH_TMP/06-arts.md" \
+research_call "1g-arts" 8 "$RESEARCH_TMP/06-arts.md" \
 "Today is $DATE_HUMAN. Search for major arts, culture, film, theater, and music news from the past 24 hours. Look for:
 - Major film releases or festival news
 - Notable book publications or literary awards
@@ -404,11 +424,11 @@ PID_ARTS=$_RESEARCH_PID
 
 ALL_PIDS="$PID_NEWS $PID_WSWS $PID_SCIENCE $PID_ECONOMY $PID_PSEUDO $PID_ARTS"
 
-# Global 10-minute timeout — kill anything still running
-( sleep 600
+# Global 15-minute timeout — kill anything still running
+( sleep 900
   for pid in $ALL_PIDS; do
     if kill -0 "$pid" 2>/dev/null; then
-      log "WARNING: Research PID $pid timed out after 10 min — killing"
+      log "WARNING: Research PID $pid timed out after 15 min — killing"
       kill "$pid" 2>/dev/null
       sleep 3
       kill -9 "$pid" 2>/dev/null
@@ -430,7 +450,7 @@ wait_step() {
   elif [[ $lines -gt 3 ]]; then
     log "  $name: Warning — exit code $exit_code but has output ($lines lines), using it"
   else
-    log "  $name: FAILED (exit $exit_code, $lines lines)"
+    log "  $name: FAILED (exit $exit_code, $lines lines): $(head -c 300 "$outfile" 2>/dev/null | tr '\n' ' ')"
   fi
 }
 
@@ -444,12 +464,33 @@ wait_step "$PID_ARTS"    "1g-arts"       "$RESEARCH_TMP/06-arts.md"
 kill "$RESEARCH_WATCHDOG" 2>/dev/null || true
 wait "$RESEARCH_WATCHDOG" 2>/dev/null || true
 
+# ── Quota / systemic-failure check ──────────────────────────────────────────
+# If outputs carry a usage/rate-limit message, or most calls died almost
+# immediately (Sep 1: all six failed within 2-26s), retrying and running the
+# Opus writer only burns more of the shared usage window. Stop here.
+FAILED_COUNT=0
+FAILED_TEXT=""
+for f in "$RESEARCH_TMP"/0[1-6]-*.md; do
+  # Only inspect failed outputs — real news text can mention "quota" or "rate limit".
+  if [[ ! -f "$f" || $(wc -l < "$f" | tr -d ' ') -le 3 ]]; then
+    FAILED_COUNT=$((FAILED_COUNT + 1))
+    FAILED_TEXT+="$(head -c 300 "$f" 2>/dev/null) "
+  fi
+done
+RESEARCH_ELAPSED=$(( $(date +%s) - STEP1_START ))
+if echo "$FAILED_TEXT" | grep -qiE 'usage limit|rate limit|rate_limit|quota|overloaded|credit balance|limit reached|resets at'; then
+  die "Research hit a usage/rate limit: $(echo "$FAILED_TEXT" | head -c 300)"
+fi
+if (( FAILED_COUNT >= 4 && RESEARCH_ELAPSED < 90 )); then
+  die "$FAILED_COUNT/6 research calls failed within ${RESEARCH_ELAPSED}s — systemic failure, not retrying"
+fi
+
 # ── Retry failed sub-steps (sequentially, to avoid rate-limit contention) ─
 
 retry_if_empty() {
   local timeout_secs="$1" outfile="$2" name="$3" max_turns="$4"
   shift 4
-  local prompt="$*"
+  local prompt="$*$(budget_note "$max_turns")"
   local lines=0
   [[ -f "$outfile" ]] && lines=$(wc -l < "$outfile" | tr -d ' ')
   if [[ "$lines" -lt 4 ]]; then
@@ -482,16 +523,20 @@ retry_if_empty() {
 }
 
 # Retry any sub-steps that produced empty output — one at a time
-retry_if_empty 300 "$RESEARCH_TMP/03-science.md" "1d-science" 5 \
+retry_if_empty 420 "$RESEARCH_TMP/01-news.md" "1b-news" 15 "$PROMPT_NEWS"
+
+retry_if_empty 420 "$RESEARCH_TMP/02-wsws.md" "1c-wsws" 15 "$PROMPT_WSWS"
+
+retry_if_empty 300 "$RESEARCH_TMP/03-science.md" "1d-science" 10 \
 "Today is $DATE_HUMAN. Search for science, technology, and public health news from the past 48 hours. Check for: US measles cases, H5N1 bird flu updates, COVID-19 data, major studies in Nature/Science/Lancet/NEJM/JAMA, significant tech/AI policy developments. For each item: ### [Headline] - **Source:** [Publication](URL) - **Key finding:** [1-2 sentences with specific numbers] - **Significance:** [1 sentence]. Include at least 3-5 items with full URLs. Print directly — do NOT write files."
 
-retry_if_empty 300 "$RESEARCH_TMP/04-economy.md" "1e-economy" 5 \
+retry_if_empty 300 "$RESEARCH_TMP/04-economy.md" "1e-economy" 10 \
 "Today is $DATE_HUMAN. Get the latest market data: Dow Jones, S&P 500, Nasdaq (points, change, %), European indices (FTSE, DAX), Asian indices (Nikkei, Shanghai, Hang Seng). Commodities: Oil WTI, Brent, Gold. Crypto: Bitcoin, Ethereum. Any major economic data releases (GDP, jobs, inflation, PMI, central bank decisions). Any major corporate/trade developments. Include source URLs. Print directly — do NOT write files."
 
-retry_if_empty 300 "$RESEARCH_TMP/05-pseudoleft.md" "1f-pseudoleft" 5 \
+retry_if_empty 300 "$RESEARCH_TMP/05-pseudoleft.md" "1f-pseudoleft" 12 \
 "Today is $DATE_HUMAN. Scan these pseudo-left publications for their 2-3 most notable articles from the past 24 hours: Jacobin, Left Voice, Liberation News/PSL, Socialist Alternative, SWP UK, Socialist Appeal/RCP. For each: ### [Tendency name] - **Article title** — [URL] - Political line: [1-2 sentence summary]. Note any support for bourgeois parties, failure to oppose imperialist war, national-reformist programs. Print directly — do NOT write files."
 
-retry_if_empty 300 "$RESEARCH_TMP/06-arts.md" "1g-arts" 3 \
+retry_if_empty 300 "$RESEARCH_TMP/06-arts.md" "1g-arts" 8 \
 "Today is $DATE_HUMAN. Search for 3-6 major arts, culture, film, theater, and music news items from the past 24 hours. For each: ### [Headline] - **Source:** [Publication](URL) - **Summary:** [1-2 sentences] - **Significance:** [1 sentence]. Print directly — do NOT write files."
 
 # ── Validate critical sections ───────────────────────────────────────────────
@@ -499,9 +544,10 @@ retry_if_empty 300 "$RESEARCH_TMP/06-arts.md" "1g-arts" 3 \
 NEWS_LINES=0; [[ -f "$RESEARCH_TMP/01-news.md" ]] && NEWS_LINES=$(wc -l < "$RESEARCH_TMP/01-news.md" | tr -d ' ')
 WSWS_LINES=0; [[ -f "$RESEARCH_TMP/02-wsws.md" ]] && WSWS_LINES=$(wc -l < "$RESEARCH_TMP/02-wsws.md" | tr -d ' ')
 
-if [[ "$NEWS_LINES" -lt 5 && "$WSWS_LINES" -lt 5 ]]; then
-  notify "Research failed — both news and WSWS empty. Manual intervention needed."
-  die "Critical research steps failed — both news ($NEWS_LINES lines) and WSWS ($WSWS_LINES lines) sections empty"
+# Don't spend an Opus writer run on material missing either core section.
+if [[ "$NEWS_LINES" -lt 5 || "$WSWS_LINES" -lt 5 ]]; then
+  notify "Research failed — news or WSWS empty. Manual intervention needed."
+  die "Critical research steps failed — news ($NEWS_LINES lines), WSWS ($WSWS_LINES lines); not running writer"
 fi
 
 # ── Stitch sections into raw file ────────────────────────────────────────────
@@ -611,18 +657,21 @@ log "Step 2/3: Running briefing-writer agent..."
 STEP2_START=$(date +%s)
 
 # Same --agent pattern: run AS the briefing-writer agent directly.
-# 60-minute timeout. No --output-format json (breaks multi-turn agents).
+# 30-minute timeout (successful runs finish in ~10-15 min). WebSearch is
+# disabled — research is already done; WebFetch stays for the Perspective
+# date check. No --output-format json (breaks multi-turn agents).
 "$CLAUDE" -p \
   "Today is $DATE_HUMAN. Synthesize the final daily briefing from the raw material in $WORK_DIR/briefing/daily/${DATE}_raw.md. Save the finished briefing to $WORK_DIR/briefing/daily/${DATE}_full.md. IMPORTANT: You MUST read and follow the formatting guide at $WORK_DIR/briefing/briefing-format.md exactly. Key requirements: (1) Every major section MUST open with section summary bullets — each bullet links to the item's heading and provides the most critical fact, NOT a restatement of the headline. (2) Use sentence case for ALL headings. (3) End each topic section with source attribution using the HTML format in the format guide — every link MUST include target=_blank rel=noopener. (4) Top stories must be objectively the most important world events — no WSWS-only stories in news sections. (5) Write a ~400-word world economy section (stocks, gold/silver/oil, crypto, economic data). (6) Write a ~500-word science/technology/public health section. (7) Write a ~500-word arts and culture section using the WSWS analytical framework. (8) Write a ~750-word pseudo-left press review covering Jacobin/DSA, Left Voice, PSL, Socialist Alternative, SWP UK, and Socialist Appeal/RCP IMT — 2-3 articles per tendency, political line identified, anti-Marxist positions flagged. (9) End with at least 5 coverage suggestions with headlines, descriptions, and source links. (10) Target ~10,000 words total." \
   --agent briefing-writer \
   --max-turns 30 \
+  --disallowedTools WebSearch \
   --dangerously-skip-permissions \
   >> "$LOGFILE" 2>&1 &
 STEP2_PID=$!
 
-( sleep 3600
+( sleep 1800
   if kill -0 "$STEP2_PID" 2>/dev/null; then
-    log "WARNING: Writer agent timed out after 60 minutes — killing PID $STEP2_PID"
+    log "WARNING: Writer agent timed out after 30 minutes — killing PID $STEP2_PID"
     kill "$STEP2_PID" 2>/dev/null
     sleep 5
     kill -9 "$STEP2_PID" 2>/dev/null
