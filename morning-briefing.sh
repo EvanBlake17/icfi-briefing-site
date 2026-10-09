@@ -657,21 +657,21 @@ log "Step 2/3: Running briefing-writer agent..."
 STEP2_START=$(date +%s)
 
 # Same --agent pattern: run AS the briefing-writer agent directly.
-# 30-minute timeout (successful runs finish in ~10-15 min). WebSearch is
+# 40-minute timeout (Oct 8 run took 25 min for 12k words). WebSearch is
 # disabled — research is already done; WebFetch stays for the Perspective
 # date check. No --output-format json (breaks multi-turn agents).
 "$CLAUDE" -p \
   "Today is $DATE_HUMAN. Synthesize the final daily briefing from the raw material in $WORK_DIR/briefing/daily/${DATE}_raw.md. Save the finished briefing to $WORK_DIR/briefing/daily/${DATE}_full.md. IMPORTANT: You MUST read and follow the formatting guide at $WORK_DIR/briefing/briefing-format.md exactly. Key requirements: (1) Every major section MUST open with section summary bullets — each bullet links to the item's heading and provides the most critical fact, NOT a restatement of the headline. (2) Use sentence case for ALL headings. (3) End each topic section with source attribution using the HTML format in the format guide — every link MUST include target=_blank rel=noopener. (4) Top stories must be objectively the most important world events — no WSWS-only stories in news sections. (5) Write a ~400-word world economy section (stocks, gold/silver/oil, crypto, economic data). (6) Write a ~500-word science/technology/public health section. (7) Write a ~500-word arts and culture section using the WSWS analytical framework. (8) Write a ~750-word pseudo-left press review covering Jacobin/DSA, Left Voice, PSL, Socialist Alternative, SWP UK, and Socialist Appeal/RCP IMT — 2-3 articles per tendency, political line identified, anti-Marxist positions flagged. (9) End with at least 5 coverage suggestions with headlines, descriptions, and source links. (10) Target ~10,000 words total." \
   --agent briefing-writer \
-  --max-turns 30 \
+  --max-turns 45 \
   --disallowedTools WebSearch \
   --dangerously-skip-permissions \
   >> "$LOGFILE" 2>&1 &
 STEP2_PID=$!
 
-( sleep 1800
+( sleep 2400
   if kill -0 "$STEP2_PID" 2>/dev/null; then
-    log "WARNING: Writer agent timed out after 30 minutes — killing PID $STEP2_PID"
+    log "WARNING: Writer agent timed out after 40 minutes — killing PID $STEP2_PID"
     kill "$STEP2_PID" 2>/dev/null
     sleep 5
     kill -9 "$STEP2_PID" 2>/dev/null
